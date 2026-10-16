@@ -1,0 +1,89 @@
+rules_version = '2';
+
+// Warehouse Asset Desk – database security rules.
+// Paste this whole file into Firebase console → Firestore Database → Rules → Publish.
+//
+// Who can do what:
+//   • Nobody can read or write anything without logging in.
+//   • A login only works if the store manager created a "users" record for it
+//     and the account is active.
+//   • Staff can only move assets through their own request / accept / return steps.
+//   • Store managers (role "admin") can do everything except delete accounts.
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() { return request.auth != null; }
+    function userDoc(uid) { return /databases/$(database)/documents/users/$(uid); }
+    function profile() { return get(userDoc(request.auth.uid)).data; }
+    function isActive() { return signedIn() && exists(userDoc(request.auth.uid)) && profile().active == true; }
+    function isAdmin() { return isActive() && profile().role == 'admin'; }
+    function bootstrapDoc() { return /databases/$(database)/documents/config/bootstrap; }
+
+    // Marks that the first store manager has been created.
+    match /config/bootstrap {
+      allow read: if true;
+      allow create: if signedIn()
+        && !exists(bootstrapDoc())
+        && getAfter(userDoc(request.auth.uid)).data.role == 'admin';
+      allow update, delete: if false;
+    }
+
+    // User accounts (name, email, role, active). Passwords are held by Firebase Authentication, never here.
+    match /users/{uid} {
+      allow read: if isActive();
+      allow create: if (isAdmin() && request.resource.data.role in ['admin', 'staff'])
+        || (signedIn() && request.auth.uid == uid
+            && !exists(bootstrapDoc())
+            && existsAfter(bootstrapDoc())
+            && request.resource.data.role == 'admin'
+            && request.resource.data.active == true);
+      allow update: if (isAdmin() && request.resource.data.role in ['admin', 'staff'])
+        || (isActive() && request.auth.uid == uid
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['mustChange', 'lastLoginAt']));
+      allow delete: if false;
+    }
+
+    match /locations/{id} {
+      allow read: if isActive();
+      allow write: if isAdmin();
+    }
+
+    match /assets/{id} {
+      allow read: if isActive();
+      allow create, delete: if isAdmin();
+      allow update: if isAdmin() || (isActive() && staffMove());
+    }
+
+    // The only asset changes a staff member may make, all on their own loans.
+    function staffMove() {
+      let before = resource.data;
+      let after = request.resource.data;
+      let uid = request.auth.uid;
+      return after.diff(before).affectedKeys().hasOnly([
+          'status', 'holderId', 'requestedAt', 'holdSince', 'dueBack', 'purpose',
+          'approvedBy', 'approvedAt', 'managerNote', 'returnDeclined',
+          'returnRequestedAt', 'returnCondition', 'returnNote'])
+        && (
+          // 1. request an available item for themselves
+          (before.status == 'available' && after.status == 'requested' && after.holderId == uid)
+          // 2. withdraw their own request (before or after approval)
+          || (before.status in ['requested', 'approved'] && before.holderId == uid
+              && after.status == 'available' && after.holderId == null)
+          // 3. accept an approved item
+          || (before.status == 'approved' && before.holderId == uid
+              && after.status == 'on_hold' && after.holderId == uid)
+          // 4. hand an item back for inspection
+          || (before.status == 'on_hold' && before.holderId == uid
+              && after.status == 'return_pending' && after.holderId == uid)
+        );
+    }
+
+    // Activity log. Entries can be added but never edited or deleted.
+    match /history/{id} {
+      allow read: if isAdmin() || (isActive() && resource.data.requesterId == request.auth.uid);
+      allow create: if isActive() && request.resource.data.userId == request.auth.uid;
+      allow update, delete: if false;
+    }
+  }
+}

@@ -1,0 +1,1354 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0}img{max-width:100%}</style>
+<title>Warehouse Asset Desk</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">
+<style>
+/* Layout: a working desk — header with role switch, sub-tabs, form card above a scannable table. Location codes look like yellow-edged bin labels. */
+:root{
+  --bg:#eceeec; --surface:#ffffff; --sunk:#f5f6f5; --ink:#17212a; --muted:#5b6971; --line:#d3d9da;
+  --accent:#1d6b84; --accent-ink:#ffffff; --accent-soft:#dcebf0;
+  --label:#f0c02c; --ok:#2c7a4c; --ok-soft:#dff0e5; --warn:#a86300; --warn-soft:#fbecd3;
+  --bad:#b3392f; --bad-soft:#f7dfdc; --idle:#6b7780; --idle-soft:#e6e9ea;
+  --pend:#6b4fb0; --pend-soft:#ebe5f7;
+  --font-ui:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  --font-code:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  --r:6px;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#11171b; --surface:#1a2227; --sunk:#151c20; --ink:#e3e8ea; --muted:#94a2a9; --line:#2d383e;
+  --accent:#62b4ce; --accent-ink:#0c1a20; --accent-soft:#1d3640;
+  --label:#d6a821; --ok:#5fc187; --ok-soft:#173326; --warn:#e5a647; --warn-soft:#3a2a12;
+  --bad:#ea7a6f; --bad-soft:#3d1d1a; --idle:#9aa6ad; --idle-soft:#252e33; --pend:#b39ce8; --pend-soft:#2b2340; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#11171b; --surface:#1a2227; --sunk:#151c20; --ink:#e3e8ea; --muted:#94a2a9; --line:#2d383e;
+  --accent:#62b4ce; --accent-ink:#0c1a20; --accent-soft:#1d3640;
+  --label:#d6a821; --ok:#5fc187; --ok-soft:#173326; --warn:#e5a647; --warn-soft:#3a2a12;
+  --bad:#ea7a6f; --bad-soft:#3d1d1a; --idle:#9aa6ad; --idle-soft:#252e33; --pend:#b39ce8; --pend-soft:#2b2340; color-scheme:dark}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{background:var(--bg);color:var(--ink);font-family:var(--font-ui);font-size:14px;line-height:1.5}
+.wrap{max-width:1180px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:20px 48px;display:flex;flex-direction:column;gap:18px}
+header.top{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px}
+.brand{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
+.brand h1{margin:0;font-size:22px;font-weight:700;letter-spacing:-.01em;text-wrap:balance}
+.brand .who{font-size:13px;color:var(--muted)}
+.seg{display:inline-flex;background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:3px;gap:3px}
+.seg button{border:0;background:transparent;color:var(--muted);font:600 13px var(--font-ui);padding:7px 14px;border-radius:4px;cursor:pointer}
+.seg button[aria-pressed="true"]{background:var(--ink);color:var(--bg)}
+.banner{background:var(--warn-soft);color:var(--ink);border:1px solid var(--line);border-radius:var(--r);padding:10px 14px;font-size:13px}
+nav.sub{display:flex;gap:4px;border-bottom:1px solid var(--line);overflow-x:auto}
+nav.sub button{border:0;background:none;font:500 14px var(--font-ui);color:var(--muted);padding:10px 14px;border-bottom:2px solid transparent;cursor:pointer;white-space:nowrap}
+nav.sub button[aria-selected="true"]{color:var(--ink);border-bottom-color:var(--accent);font-weight:600}
+nav.sub .n{font:600 11px var(--font-code);background:var(--idle-soft);color:var(--muted);border-radius:10px;padding:1px 7px;margin-left:6px}
+.panel{display:flex;flex-direction:column;gap:16px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:18px;display:flex;flex-direction:column;gap:14px;min-width:0}
+.card h2{margin:0;font-size:16px;font-weight:600}
+.card h2 small{font-weight:400;color:var(--muted);font-size:13px;margin-left:8px}
+.hint{color:var(--muted);font-size:13px;margin:0;max-width:68ch}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px}
+label.f{display:flex;flex-direction:column;gap:5px;font-size:12px;font-weight:600;color:var(--muted);letter-spacing:.03em;text-transform:uppercase}
+input,select,textarea{font:400 14px var(--font-ui);color:var(--ink);background:var(--sunk);border:1px solid var(--line);border-radius:4px;padding:8px 10px;width:100%;min-width:0;text-transform:none;letter-spacing:0}
+textarea{min-height:64px;resize:vertical}
+input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+.row{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+.row.end{justify-content:flex-end}
+.btn{font:600 13px var(--font-ui);border-radius:4px;padding:8px 14px;cursor:pointer;border:1px solid var(--accent);background:var(--accent);color:var(--accent-ink);white-space:nowrap}
+.btn.ghost{background:transparent;color:var(--accent)}
+.btn.quiet{background:transparent;border-color:var(--line);color:var(--ink)}
+.btn.danger{background:transparent;border-color:var(--bad);color:var(--bad)}
+.btn.sm{padding:5px 10px;font-size:12px}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.tools{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+.tools input[type=search]{flex:1 1 220px}
+.tools select{width:auto;flex:0 0 auto}
+.tablewrap{overflow-x:auto;border:1px solid var(--line);border-radius:var(--r)}
+table{width:100%;border-collapse:collapse;font-size:13px;font-variant-numeric:tabular-nums}
+th{text-align:left;font-size:11px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);background:var(--sunk);padding:9px 12px;border-bottom:1px solid var(--line);white-space:nowrap}
+td{padding:9px 12px;border-bottom:1px solid var(--line);vertical-align:middle}
+tr:last-child td{border-bottom:0}
+td.num,th.num{text-align:right}
+.tag{font:600 12px var(--font-code);letter-spacing:.02em;white-space:nowrap}
+.bin{display:inline-block;font:600 12px var(--font-code);padding:2px 8px 2px 7px;border:1px solid var(--line);border-left:4px solid var(--label);border-radius:2px;background:var(--sunk);white-space:nowrap}
+.pill{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;border-radius:12px;padding:2px 10px;white-space:nowrap}
+.pill::before{content:"";width:7px;height:7px;border-radius:50%;background:currentColor}
+.s-available{background:var(--ok-soft);color:var(--ok)}
+.s-on_hold{background:var(--accent-soft);color:var(--accent)}
+.s-inspect{background:var(--warn-soft);color:var(--warn)}
+.s-retired{background:var(--idle-soft);color:var(--idle)}
+.s-requested{background:var(--warn-soft);color:var(--warn)}
+.s-approved{background:var(--pend-soft);color:var(--pend)}
+.s-return_pending{background:var(--warn-soft);color:var(--warn)}
+nav.sub .n.hot{background:var(--warn);color:var(--surface)}
+.card h2 .n{font:600 11px var(--font-code);border-radius:10px;padding:2px 8px;margin-left:8px;vertical-align:middle}
+.n.hot{background:var(--warn);color:var(--surface)}
+.seg .n{font:600 10px var(--font-code);background:var(--warn);color:var(--surface);border-radius:9px;padding:1px 6px;margin-left:6px}
+.log{display:flex;flex-direction:column}
+.log-i{display:grid;grid-template-columns:118px 1fr;gap:4px 14px;padding:12px 4px;border-bottom:1px solid var(--line)}
+.log-i:last-child{border-bottom:0}
+.log-i.new{background:var(--warn-soft);border-radius:4px;padding-inline:10px}
+.log-t{color:var(--muted);font-size:12px;font-variant-numeric:tabular-nums}
+.log-b{display:flex;flex-direction:column;gap:4px;min-width:0}
+.log-h{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.reason{border-left:3px solid var(--bad);padding:4px 10px;background:var(--bad-soft);border-radius:0 4px 4px 0;font-size:13px}
+.reason.ok{border-left-color:var(--ok);background:var(--ok-soft)}
+.reason.plain{border-left-color:var(--line);background:var(--sunk)}
+@media (max-width:480px){.log-i{grid-template-columns:1fr}}
+.steps{display:flex;flex-wrap:wrap;gap:6px;align-items:center;font-size:12px;color:var(--muted)}
+.steps b{color:var(--ink);font-weight:600}
+.s-overdue{background:var(--bad-soft);color:var(--bad)}
+.sub2{color:var(--muted);font-size:12px}
+.empty{padding:28px 16px;text-align:center;color:var(--muted);font-size:13px;display:flex;flex-direction:column;gap:10px;align-items:center}
+.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px}
+.tile{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:14px;display:flex;flex-direction:column;gap:2px}
+.tile b{font:600 26px var(--font-code);font-variant-numeric:tabular-nums}
+.tile span{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;font-weight:600}
+.tile.alert b{color:var(--bad)}
+.bar{height:6px;background:var(--idle-soft);border-radius:3px;overflow:hidden;display:flex;min-width:80px}
+.bar i{display:block;height:100%}
+.holder{border:1px solid var(--line);border-radius:var(--r);overflow:hidden}
+.holder-h{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:8px;padding:10px 14px;background:var(--sunk);border-bottom:1px solid var(--line)}
+.holder-h strong{font-size:14px}
+.two{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:16px}
+@media (max-width:420px){.two{grid-template-columns:1fr}}
+dialog{border:1px solid var(--line);border-radius:8px;background:var(--surface);color:var(--ink);padding:0;width:min(460px,calc(100vw - 32px))}
+dialog::backdrop{background:rgba(10,16,20,.45)}
+dialog form{display:flex;flex-direction:column;gap:14px;padding:20px}
+dialog h3{margin:0;font-size:17px}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(20px + env(safe-area-inset-bottom,0px));background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:var(--r);font-size:13px;font-weight:500;max-width:calc(100vw - 32px);z-index:10}
+.err{color:var(--bad);font-size:13px;margin:0}
+.gate{display:flex;justify-content:center;padding-block:6vh 0}
+.gate form{width:min(420px,100%)}
+.gate h2{font-size:19px}
+.gate .btn{width:100%;padding:10px 14px;font-size:14px}
+.check{display:flex;gap:8px;align-items:center;font-size:13px;color:var(--muted)}
+.check input{width:auto}
+.userbox{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.role-admin{background:var(--accent-soft);color:var(--accent)}
+.role-staff{background:var(--idle-soft);color:var(--idle)}
+.cred{font:600 15px var(--font-code);background:var(--sunk);border:1px dashed var(--line);border-radius:4px;padding:12px 14px;display:grid;grid-template-columns:auto 1fr;gap:4px 14px;user-select:all}
+.cred span{color:var(--muted);font:500 12px var(--font-ui);text-transform:uppercase;letter-spacing:.05em;align-self:center}
+.pwrow{display:flex;gap:8px}
+.pwrow input{flex:1}
+@media (prefers-reduced-motion:no-preference){.btn,.seg button{transition:background .12s,color .12s}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div class="brand">
+      <h1>Warehouse Asset Desk</h1>
+      <span class="who" id="who">Connecting…</span>
+    </div>
+    <div class="userbox" id="userbox" hidden>
+      <div class="seg" id="viewSwitch" role="group" aria-label="View">
+        <button type="button" data-view="manager" aria-pressed="true">Manager</button>
+        <button type="button" data-view="user" aria-pressed="false">My desk</button>
+      </div>
+      <button class="btn quiet sm" type="button" id="btnPw">Change password</button>
+      <button class="btn quiet sm" type="button" id="btnLogout">Log out</button>
+    </div>
+  </header>
+
+  <div class="banner" id="banner" hidden></div>
+
+  <section class="gate" id="gate">
+    <form class="card" id="gateForm" autocomplete="on"><p class="hint">Loading…</p></form>
+  </section>
+
+  <div class="panel" id="app" hidden>
+
+  <!-- ================= MANAGER ================= -->
+  <section id="view-manager" class="panel">
+    <nav class="sub" role="tablist">
+      <button type="button" role="tab" data-mp="approvals" aria-selected="false">Approvals<span class="n" id="n-approvals">0</span></button>
+      <button type="button" role="tab" data-mp="assets" aria-selected="true">Assets<span class="n" id="n-assets">0</span></button>
+      <button type="button" role="tab" data-mp="locations" aria-selected="false">Locations<span class="n" id="n-locations">0</span></button>
+      <button type="button" role="tab" data-mp="holds" aria-selected="false">On hold<span class="n" id="n-holds">0</span></button>
+      <button type="button" role="tab" data-mp="report" aria-selected="false">Inventory report</button>
+      <button type="button" role="tab" data-mp="accounts" aria-selected="false">Accounts<span class="n" id="n-accounts">0</span></button>
+    </nav>
+
+    <!-- Accounts -->
+    <div class="panel" id="mp-accounts" hidden>
+      <form class="card" id="accForm" autocomplete="off">
+        <h2>Create a user account</h2>
+        <p class="hint" id="accHint">Give the person their username and temporary password. They'll be asked to set their own password the first time they log in.</p>
+        <div class="grid">
+          <label class="f">Full name<input id="u-name" required placeholder="e.g. Tan Kang Zheng"></label>
+          <label class="f"><span id="u-user-label">Username</span><input id="u-user" required placeholder="e.g. kangzheng" autocapitalize="none" spellcheck="false"></label>
+          <label class="f">Role<select id="u-role"><option value="staff">Staff – request and return assets</option><option value="admin">Store manager – full access</option></select></label>
+          <label class="f">Temporary password<div class="pwrow"><input id="u-pw" required minlength="8" autocomplete="new-password"><button class="btn quiet" type="button" id="u-gen">Generate</button></div></label>
+        </div>
+        <p class="err" id="accErr" hidden></p>
+        <div class="row end"><button class="btn" type="submit">Create account</button></div>
+      </form>
+      <div class="card">
+        <h2>User accounts</h2>
+        <div id="accTable"></div>
+      </div>
+    </div>
+
+    <!-- Approvals -->
+    <div class="panel" id="mp-approvals" hidden>
+      <div class="card">
+        <h2>Requests waiting for approval</h2>
+        <p class="steps"><b>1 · Staff request</b> → <b>2 · Manager approves</b> → <b>3 · Staff accept the item</b> → loan starts</p>
+        <div id="pendList"></div>
+      </div>
+      <div class="card">
+        <h2>Returns waiting for inspection</h2>
+        <p class="hint">Check the item and its accessories. Approve to put it back in stock, or decline so it stays under the person's name until they bring back what's missing.</p>
+        <div id="retList"></div>
+      </div>
+      <div class="card">
+        <h2>Approved, waiting for staff to accept</h2>
+        <p class="hint">The loan starts when the person confirms they've received the item.</p>
+        <div id="apprList"></div>
+      </div>
+    </div>
+
+    <!-- Assets -->
+    <div class="panel" id="mp-assets" hidden>
+      <form class="card" id="assetForm" autocomplete="off">
+        <h2>Create new assets</h2>
+        <div class="grid">
+          <label class="f">Product name<input id="a-name" required placeholder="e.g. BlackWidow V4 Pro"></label>
+          <label class="f">Category<input id="a-cat" list="catList" placeholder="e.g. Keyboard"></label>
+          <label class="f">Model / SKU<input id="a-model" placeholder="e.g. RZ03-04680100"></label>
+          <label class="f">Serial number<input id="a-serial" placeholder="Leave blank if several units"></label>
+          <label class="f">Store at location<select id="a-loc" required></select></label>
+          <label class="f">Tag prefix<input id="a-prefix" value="RZ" maxlength="10"></label>
+          <label class="f">Units to create<input id="a-qty" type="number" min="1" max="50" value="1"></label>
+        </div>
+        <label class="f">Notes / specs<textarea id="a-notes" placeholder="e.g. Win 11 · i9-13950HX RTX4090 32GB RAM 1TB SSD · US SKU"></textarea></label>
+        <datalist id="catList"></datalist>
+        <p class="err" id="assetErr" hidden></p>
+        <div class="row end">
+          <span class="hint" id="tagPreview"></span>
+          <button class="btn" type="submit">Create assets</button>
+        </div>
+      </form>
+
+      <div class="card">
+        <h2>Import or export assets</h2>
+        <p class="hint">Move stock between copies of the desk, or keep a backup. Export saves all locations and assets to a file. Import loads that file and skips anything already here.</p>
+        <div class="row"><input type="file" id="impFile" accept=".json,application/json" style="flex:1 1 220px;width:auto"><button class="btn quiet" type="button" id="impBtn">Import file</button><button class="btn ghost" type="button" id="expBtn">Export data</button></div>
+        <p class="hint" id="impMsg"></p>
+      </div>
+
+      <div class="card">
+        <h2>All assets</h2>
+        <div class="tools">
+          <input type="search" id="a-search" placeholder="Search tag, name, serial, category">
+          <select id="a-fstatus" aria-label="Filter by status">
+            <option value="">All statuses</option><option value="available">Available</option><option value="requested">Requested</option><option value="approved">Approved</option><option value="on_hold">On hold</option><option value="return_pending">Return pending</option><option value="inspect">Needs check</option><option value="retired">Retired</option>
+          </select>
+          <select id="a-floc" aria-label="Filter by location"></select>
+        </div>
+        <div id="assetTable"></div>
+      </div>
+    </div>
+
+    <!-- Locations -->
+    <div class="panel" id="mp-locations" hidden>
+      <form class="card" id="locForm" autocomplete="off">
+        <h2>Create a location</h2>
+        <p class="hint">Use a code your team will read off the shelf label, such as Zone-Rack-Shelf (A-01-03).</p>
+        <div class="grid">
+          <label class="f">Location code<input id="l-code" required placeholder="e.g. A-01-03"></label>
+          <label class="f">Type<select id="l-type"><option>Shelf</option><option>Rack</option><option>Bin</option><option>Floor</option><option>Cage</option><option>Cabinet</option></select></label>
+          <label class="f">Zone / area<input id="l-zone" placeholder="e.g. Zone A – Peripherals"></label>
+          <label class="f">Description<input id="l-desc" placeholder="e.g. Top shelf, left of door"></label>
+        </div>
+        <p class="err" id="locErr" hidden></p>
+        <div class="row end"><button class="btn" type="submit">Create location</button></div>
+      </form>
+      <div class="card">
+        <h2>Locations</h2>
+        <div id="locTable"></div>
+      </div>
+    </div>
+
+    <!-- Holds -->
+    <div class="panel" id="mp-holds" hidden>
+      <div class="card">
+        <h2>Assets currently on hold <small>grouped by person</small></h2>
+        <div class="tools">
+          <input type="search" id="h-search" placeholder="Search person, tag or product">
+          <label class="row" style="gap:6px;font-size:13px"><input type="checkbox" id="h-overdue" style="width:auto"> Overdue only</label>
+        </div>
+        <div id="holdList" class="panel"></div>
+      </div>
+    </div>
+
+    <!-- Report -->
+    <div class="panel" id="mp-report" hidden>
+      <div class="row" style="justify-content:space-between">
+        <div><h2 style="margin:0;font-size:18px">Warehouse inventory report</h2><span class="sub2" id="r-stamp"></span></div>
+        <div class="row"><button class="btn ghost" type="button" id="r-csv">Download CSV</button><button class="btn quiet" type="button" id="r-copy">Copy summary</button></div>
+      </div>
+      <div class="tiles" id="r-tiles"></div>
+      <div class="two">
+        <div class="card"><h2>By location</h2><div id="r-loc"></div></div>
+        <div class="card"><h2>By category</h2><div id="r-cat"></div></div>
+      </div>
+      <div class="card"><h2>Overdue returns</h2><div id="r-overdue"></div></div>
+      <div class="card"><h2>Recent movements</h2><div id="r-hist"></div></div>
+      <div class="card" id="exampleCard">
+        <h2>Example data</h2>
+        <p class="hint" id="exHint"></p>
+        <div class="row"><button class="btn quiet" type="button" id="exLoad">Load example stock</button><button class="btn danger" type="button" id="exClear">Remove example data</button></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= USER ================= -->
+  <section id="view-user" class="panel" hidden>
+    <div class="card">
+      <h2>My requests</h2>
+      <p class="steps"><b>1 · You request</b> → <b>2 · Manager approves</b> → <b>3 · You accept the item</b> → loan starts</p>
+      <div id="myReqs"></div>
+    </div>
+    <div class="card">
+      <div class="row" style="justify-content:space-between">
+        <h2>My activity <span class="n hot" id="unreadChip" hidden></span></h2>
+        <button class="btn quiet sm" type="button" id="markRead" hidden>Mark all as read</button>
+      </div>
+      <p class="hint">Every step on your requests and returns, including the manager's reasons.</p>
+      <div id="myLog"></div>
+    </div>
+    <div class="card">
+      <h2>Assets I'm holding</h2>
+      <div id="myList"></div>
+    </div>
+    <div class="card">
+      <h2>Search and request</h2>
+      <div class="tools">
+        <input type="search" id="u-search" placeholder="Search product, tag, model or category">
+        <select id="u-fcat" aria-label="Category"></select>
+        <label class="row" style="gap:6px;font-size:13px"><input type="checkbox" id="u-avail" style="width:auto" checked> Available only</label>
+      </div>
+      <div id="userTable"></div>
+    </div>
+  </section>
+  </div>
+</div>
+
+<dialog id="dlg"><form id="dlgForm"></form></dialog>
+<div class="toast" id="toast" hidden></div>
+
+<script src="firebase-config.js"></script>
+<script>
+(() => {
+  const $ = s => document.querySelector(s);
+  const esc = v => String(v ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+  const STATUS = {available:"Available", requested:"Requested", approved:"Approved", on_hold:"On hold", return_pending:"Return pending", inspect:"Needs check", retired:"Retired"};
+  const OUT = ["requested","approved","on_hold","return_pending"];
+  const today = () => new Date().toISOString().slice(0,10);
+  const addDays = n => { const d = new Date(); d.setDate(d.getDate()+n); return d.toISOString().slice(0,10); };
+  const fmtDate = iso => iso ? new Date(iso).toLocaleDateString(undefined,{day:"2-digit",month:"short",year:"numeric"}) : "–";
+  const fmtDT = iso => iso ? new Date(iso).toLocaleString(undefined,{day:"2-digit",month:"short",hour:"2-digit",minute:"2-digit"}) : "–";
+  const rid = p => p + "_" + Date.now().toString(36) + Math.random().toString(36).slice(2,7);
+  const slug = s => String(s).trim().replace(/[^A-Za-z0-9_\-.~:@+]/g,"_").slice(0,120) || rid("x");
+
+  const S = { assets:new Map(), locations:new Map(), accounts:new Map(), history:[], myLog:null };
+  let seenAt = "";
+  const DECISIONS = ["Approved","Rejected","Approval cancelled","Return approved","Return declined","Checked in by manager"];
+  let B = null, userNs = null, dl = null, me = null, myAcct = null, isMgr = false;
+  const names = {};
+  let view = "manager", mpanel = "assets";
+  const store = { get(k){ try{ return sessionStorage.getItem(k) ?? localStorage.getItem(k); }catch(e){ return null; } },
+                  set(k,v,keep){ try{ (keep?localStorage:sessionStorage).setItem(k,v); }catch(e){} },
+                  del(k){ try{ sessionStorage.removeItem(k); localStorage.removeItem(k); }catch(e){} } };
+
+  // ---------- toast ----------
+  let tt;
+  function toast(msg){ const t=$("#toast"); t.textContent=msg; t.hidden=false; clearTimeout(tt); tt=setTimeout(()=>t.hidden=true,3200); }
+
+  /* =====================================================================
+     STORAGE BACKEND
+     Every read and write goes through B. Collections: accounts, assets,
+     locations, history. To move to Firebase, write FirebaseBackend with
+     these same methods (Firestore maps one-to-one) and pick it in boot().
+     ===================================================================== */
+  function ArtifactBackend(db){
+    const q = (c,o={}) => { let r=db.collection(c); if(o.where) r=r.where(...o.where); if(o.orderBy) r=r.orderBy(...o.orderBy); if(o.limit) r=r.limit(o.limit); return r; };
+    return {
+      kind:"claude",
+      set:(c,id,d)=>db.collection(c).doc(id).set(d),
+      update:(c,id,d)=>db.collection(c).doc(id).update(d),
+      remove:(c,id)=>db.collection(c).doc(id).delete(),
+      add:(c,d)=>db.collection(c).add(d),
+      get:async (c,id)=>{ const s=await db.collection(c).doc(id).get(); return s.exists?{id,...s.data()}:null; },
+      list:async (c,o)=>{ const s=await q(c,o).get(); return s.docs.map(d=>({id:d.id,...d.data()})); },
+      watch:(c,o,cb,err)=>q(c,o).onSnapshot(s=>cb(s.docs.map(d=>({id:d.id,...d.data()}))), err),
+      // Short lock so two people can't grab the same asset at once.
+      getLocked:async (c,id,holder)=>{ const ref=db.collection(c).doc(id); const l=await ref.acquire({holder,ttlMs:5000}); if(!l.acquired) return {busy:true}; const s=await ref.get(); return {doc:s.exists?{id,...s.data()}:null}; }
+    };
+  }
+  function LocalBackend(){   // preview only: keeps data in memory on this screen
+    const data={}, subs=[]; const col=c=>data[c]||(data[c]=new Map());
+    const fire=c=>subs.filter(s=>s.c===c).forEach(s=>s.run());
+    return {
+      kind:"local",
+      set:async(c,id,d)=>{ col(c).set(id,{...d}); fire(c); },
+      update:async(c,id,d)=>{ const x=col(c).get(id); if(!x) throw {code:"invalid_argument"}; Object.assign(x,d); fire(c); },
+      remove:async(c,id)=>{ col(c).delete(id); fire(c); },
+      add:async(c,d)=>{ col(c).set(rid("d"),{...d}); fire(c); },
+      get:async(c,id)=>{ const x=col(c).get(id); return x?{id,...x}:null; },
+      list:async(c)=>[...col(c)].map(([id,d])=>({id,...d})),
+      watch:(c,o,cb)=>{ const s={c,run(){ let r=[...col(c)].map(([id,d])=>({id,...d})); if(o.where){ const [f,,v]=o.where; r=r.filter(x=>x[f]===v);} if(o.orderBy){ const [f,dir]=o.orderBy; r.sort((a,b)=>String(a[f]).localeCompare(String(b[f]))*(dir==="desc"?-1:1)); } if(o.limit) r=r.slice(0,o.limit); cb(r);} }; subs.push(s); setTimeout(()=>s.run()); return ()=>subs.splice(subs.indexOf(s),1); },
+      getLocked:async(c,id)=>{ const x=col(c).get(id); return {doc:x?{id,...x}:null}; }
+    };
+  }
+
+  // ---------- data helpers used by the screens ----------
+  const put   = (c,id,d) => B.set(c,id,d);
+  const patch = (c,id,d) => B.update(c,id,d);
+  const del   = (c,id)   => B.remove(c,id);
+  async function setMany(c, list){ if (B.setMany) return B.setMany(c, list); for (const x of list){ const {id, ...d} = x; await B.set(c, id, d); } }
+  async function log(ev){ ev.at = new Date().toISOString(); ev.userId = me; try{ await B.add("history", ev); }catch(e){} }
+  function failed(e){ const c = e && e.code; toast(c==="quota_exceeded"||c==="resource-exhausted" ? "Storage is full. Remove old records and try again." : (c==="invalid_argument"||c==="permission-denied") ? "You don't have permission to change this." : "Couldn't save. Check your connection and try again."); }
+
+  /* Firebase (Firestore) version of the same storage methods. Used when the
+     desk is hosted on its own site with firebase-config.js filled in. */
+  function FirebaseBackend(fb){
+    const {fs, f} = fb;
+    const ref = (c,id) => f.doc(fs, c, id);
+    const q = (c,o={}) => { const p=[]; if(o.where) p.push(f.where(...o.where)); if(o.orderBy) p.push(f.orderBy(...o.orderBy)); if(o.limit) p.push(f.limit(o.limit)); return f.query(f.collection(fs,c), ...p); };
+    const rows = s => s.docs.map(d=>({id:d.id, ...d.data()}));
+    return {
+      kind:"firebase",
+      set:(c,id,d)=>f.setDoc(ref(c,id), d),
+      update:(c,id,d)=>f.updateDoc(ref(c,id), d),
+      remove:(c,id)=>f.deleteDoc(ref(c,id)),
+      add:(c,d)=>f.addDoc(f.collection(fs,c), d),
+      get:async(c,id)=>{ const s=await f.getDoc(ref(c,id)); return s.exists()?{id, ...s.data()}:null; },
+      list:async(c,o)=>rows(await f.getDocs(q(c,o))),
+      watch:(c,o,cb,err)=>f.onSnapshot(q(c,o), s=>cb(rows(s)), e=>{ console.warn(c, e); err && err(e); }),
+      getLocked:async(c,id)=>{ const s=await f.getDoc(ref(c,id)); return {doc:s.exists()?{id, ...s.data()}:null}; },
+      batchSet:async(list)=>{ const b=f.writeBatch(fs); list.forEach(([c,id,d])=>b.set(ref(c,id), d)); await b.commit(); },
+      setMany:async(c,list)=>{ for(let i=0;i<list.length;i+=400){ const b=f.writeBatch(fs); list.slice(i,i+400).forEach(x=>{ const {id, ...d}=x; b.set(ref(c,id), d); }); await b.commit(); } }
+    };
+  }
+
+  /* =====================================================================
+     ACCOUNTS & LOGIN
+     A = the login system. Two versions with the same methods:
+       ClaudeAuth   – inside Claude: accounts collection keyed by username,
+                      passwords kept only as PBKDF2-SHA256 hashes.
+       FirebaseAuth – on the hosted site: Firebase Authentication (email +
+                      password); roles live in the "users" collection and
+                      the Firestore rules enforce them on the server.
+     ===================================================================== */
+  const ROLE = {admin:"Store manager", staff:"Staff"};
+  const pwProblem = p => p.length < 8 ? "Use at least 8 characters." : null;
+  function genPw(){ const a="abcdefghjkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789"; const r=crypto.getRandomValues(new Uint32Array(10)); return [...r].map(n=>a[n%a.length]).join(""); }
+  const activeAdmins = () => [...S.accounts.values()].filter(a=>a.role==="admin" && a.active);
+  let A = null;
+
+  const PW_ITER = 150000;
+  const b64 = buf => btoa(String.fromCharCode(...new Uint8Array(buf)));
+  const unb64 = s => Uint8Array.from(atob(s), c=>c.charCodeAt(0));
+  async function hashPw(pw, saltB64, iter){
+    const key = await crypto.subtle.importKey("raw", new TextEncoder().encode(pw), "PBKDF2", false, ["deriveBits"]);
+    const bits = await crypto.subtle.deriveBits({name:"PBKDF2", hash:"SHA-256", salt:unb64(saltB64), iterations:iter}, key, 256);
+    return b64(bits);
+  }
+  async function makePw(pw){ const salt=b64(crypto.getRandomValues(new Uint8Array(16))); return {alg:"PBKDF2-SHA256", iter:PW_ITER, salt, hash:await hashPw(pw,salt,PW_ITER)}; }
+  async function checkPw(acct, pw){ if(!acct?.pw) return false; const h = await hashPw(pw, acct.pw.salt, acct.pw.iter||PW_ITER); return h === acct.pw.hash; }
+
+  function ClaudeAuth(B, userNs){
+    let acc = new Map(), cb = () => {};
+    const view = a => ({id:a.id||a.username, login:a.username, name:a.name, role:a.role, active:a.active!==false, mustChange:!!a.mustChange, lastLoginAt:a.lastLoginAt||null});
+    return {
+      kind:"claude", coll:"accounts", loginLabel:"Username", loginPlaceholder:"e.g. kangzheng",
+      norm: s => String(s||"").trim().toLowerCase(),
+      check: u => /^[a-z0-9._-]{3,32}$/.test(u) ? null : "Usernames are 3–32 characters: lowercase letters, numbers, dot, dash or underscore.",
+      view,
+      async start(onState){
+        cb = onState;
+        try{ acc = new Map((await B.list("accounts")).map(r=>[r.id, r])); }catch(e){}
+        B.watch("accounts", {}, r=>{ acc = new Map(r.map(x=>[x.id, x])); });
+        if (!acc.size){ const can = userNs ? (await userNs.canEdit()) !== false : true; return cb({status: can ? "setup" : "wait"}); }
+        const saved = store.get("wms-session"), a = saved && acc.get(saved);
+        cb(a && a.active!==false ? {status:"in", acct:view(a)} : {status:"out"});
+      },
+      async setup({name, login, pw}){
+        if (acc.size) throw new Error("The desk was just set up. Log in instead.");
+        const a = {username:login, name, role:"admin", active:true, mustChange:false, pw:await makePw(pw), createdAt:new Date().toISOString(), createdBy:login, lastLoginAt:null};
+        await B.set("accounts", login, a); acc.set(login, {id:login, ...a});
+        store.set("wms-session", login, true);
+        cb({status:"in", acct:view({id:login, ...a})});
+      },
+      async login(login, pw, keep){
+        const a = acc.get(login);
+        if (!a || !(await checkPw(a, pw))) throw new Error("That username and password don't match.");
+        if (a.active===false) throw new Error("This account has been disabled. Ask the store manager.");
+        store.del("wms-session"); store.set("wms-session", login, keep);
+        cb({status:"in", acct:view(a)});
+      },
+      async logout(msg){ store.del("wms-session"); cb({status:"out", msg}); },
+      async firstPassword(pw){
+        if (await checkPw(acc.get(me), pw)) throw new Error("Choose a different password from the temporary one.");
+        await B.update("accounts", me, {pw:await makePw(pw), mustChange:false});
+      },
+      async changePassword(cur, np){
+        if (!(await checkPw(acc.get(me), cur))) throw new Error("Your current password is wrong.");
+        await B.update("accounts", me, {pw:await makePw(np), mustChange:false});
+      },
+      async create({name, login, role, pw}){
+        if (acc.has(login) || S.accounts.has(login)) throw new Error(`The username ${login} is already taken.`);
+        const a = {username:login, name, role, active:true, mustChange:true, pw:await makePw(pw), createdAt:new Date().toISOString(), createdBy:me, lastLoginAt:null};
+        await B.set("accounts", login, a); return view({id:login, ...a});
+      },
+      async reset(a){ const pw = genPw(); await B.update("accounts", a.id, {pw:await makePw(pw), mustChange:true}); return {tempPw:pw}; }
+    };
+  }
+
+  function FirebaseAuth(fb, B){
+    const {auth, a, config} = fb;
+    let cb = () => {}, quiet = false, pendingMsg = "";
+    const view = (id, d, email) => ({id, login:d.email||email||"", name:d.name||"", role:d.role, active:d.active===true, mustChange:!!d.mustChange, lastLoginAt:d.lastLoginAt||null});
+    const words = e => ({
+      "auth/invalid-credential":"That email and password don't match.", "auth/wrong-password":"That email and password don't match.",
+      "auth/user-not-found":"That email and password don't match.", "auth/invalid-login-credentials":"That email and password don't match.",
+      "auth/too-many-requests":"Too many attempts. Wait a few minutes and try again.",
+      "auth/email-already-in-use":"An account with this email already exists.", "auth/invalid-email":"Enter a valid email address.",
+      "auth/weak-password":"Use at least 8 characters.", "auth/network-request-failed":"No connection. Check your internet and try again.",
+      "auth/requires-recent-login":"Log out, log in again, then retry.", "auth/operation-not-allowed":"Email/password login isn't switched on in Firebase yet (see the setup guide, step 2).",
+      "auth/unauthorized-domain":"This website isn't on Firebase's list of allowed sites yet (see the setup guide, step 9).",
+      "permission-denied":"Firebase refused this. Check that the security rules from firestore.rules are published (setup guide, step 4)."
+    }[e && e.code] || (e && e.message) || "Something went wrong.");
+    const fail = e => { console.warn(e); throw new Error(words(e)); };
+    return {
+      kind:"firebase", coll:"users", loginLabel:"Email", loginPlaceholder:"e.g. kangzheng@company.com",
+      norm: s => String(s||"").trim().toLowerCase(),
+      check: s => /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(s) ? null : "Enter a valid email address.",
+      view: d => view(d.id, d),
+      async start(onState){
+        cb = onState;
+        a.onAuthStateChanged(auth, async user => {
+          if (quiet) return;
+          if (!user){
+            let setUp = true; try{ setUp = !!(await B.get("config", "bootstrap")); }catch(e){ console.warn(e); }
+            const m = pendingMsg; pendingMsg = "";
+            return cb({status: setUp ? "out" : "setup", msg: m});
+          }
+          let d = null; try{ d = await B.get("users", user.uid); }catch(e){ console.warn(e); }
+          if (!d || d.active !== true){ pendingMsg = "This account is disabled or hasn't been set up. Ask the store manager."; await a.signOut(auth); return; }
+          cb({status:"in", acct:view(user.uid, d, user.email)});
+        });
+      },
+      async setup({name, login, pw}){
+        quiet = true;
+        try{
+          let cred;
+          try{ cred = await a.createUserWithEmailAndPassword(auth, login, pw); }
+          catch(e){ if (e.code === "auth/email-already-in-use") cred = await a.signInWithEmailAndPassword(auth, login, pw); else throw e; }
+          const uid = cred.user.uid, now = new Date().toISOString();
+          const d = {name, email:login, role:"admin", active:true, mustChange:false, createdAt:now, createdBy:uid, lastLoginAt:null};
+          await B.batchSet([["users", uid, d], ["config", "bootstrap", {at:now, by:uid}]]);
+          quiet = false; cb({status:"in", acct:view(uid, d)});
+        }catch(e){ quiet = false; fail(e); }
+      },
+      async login(login, pw, keep){
+        try{ await a.setPersistence(auth, keep ? a.browserLocalPersistence : a.browserSessionPersistence); await a.signInWithEmailAndPassword(auth, login, pw); }
+        catch(e){ fail(e); }
+      },
+      async logout(msg){ pendingMsg = msg || ""; await a.signOut(auth); },
+      async firstPassword(pw){
+        try{ await a.updatePassword(auth.currentUser, pw); }catch(e){ fail(e); }
+        await B.update("users", me, {mustChange:false});
+      },
+      async changePassword(cur, np){
+        try{ await a.reauthenticateWithCredential(auth.currentUser, a.EmailAuthProvider.credential(auth.currentUser.email, cur)); }
+        catch(e){ throw new Error(e.code==="auth/too-many-requests" ? words(e) : "Your current password is wrong."); }
+        try{ await a.updatePassword(auth.currentUser, np); }catch(e){ fail(e); }
+      },
+      async create({name, login, role, pw}){
+        // A second, temporary Firebase app creates the login so the store manager stays logged in.
+        const app2 = fb.app.initializeApp(config, "add-" + Date.now()), auth2 = a.getAuth(app2);
+        let uid;
+        try{ const cred = await a.createUserWithEmailAndPassword(auth2, login, pw); uid = cred.user.uid; await a.signOut(auth2); }
+        catch(e){ fail(e); }
+        finally{ fb.app.deleteApp(app2).catch(()=>{}); }
+        const d = {name, email:login, role, active:true, mustChange:true, createdAt:new Date().toISOString(), createdBy:me, lastLoginAt:null};
+        try{ await B.set("users", uid, d); }catch(e){ fail(e); }
+        return view(uid, d);
+      },
+      async reset(acct){ try{ await a.sendPasswordResetEmail(auth, acct.login); }catch(e){ fail(e); } return {emailed:true}; }
+    };
+  }
+  async function loadFirebase(cfg){
+    const base = "https://www.gstatic.com/firebasejs/10.12.2/";
+    const [app, auth, fsm] = await Promise.all([import(base+"firebase-app.js"), import(base+"firebase-auth.js"), import(base+"firebase-firestore.js")]);
+    const inst = app.initializeApp(cfg);
+    return {app, a:auth, f:fsm, config:cfg, auth:auth.getAuth(inst), fs:fsm.getFirestore(inst)};
+  }
+
+  // ---------- helpers ----------
+  const assets = () => [...S.assets.values()];
+  const locs = () => [...S.locations.values()].sort((a,b)=>a.code.localeCompare(b.code,undefined,{numeric:true}));
+  const locCode = id => S.locations.get(id)?.code || "Unassigned";
+  const isOverdue = a => a.status==="on_hold" && a.dueBack && a.dueBack < today();
+  const pill = a => isOverdue(a) ? `<span class="pill s-overdue">Overdue</span>` : `<span class="pill s-${a.status}">${STATUS[a.status]||a.status}</span>`;
+  function holderName(id){
+    if (!id) return "–";
+    if (id === me) return "You";
+    const a = S.accounts.get(id); if (a) return a.name || a.username || id;
+    if (String(id).startsWith("u_")) return names[id] || "Earlier user";
+    return id;
+  }
+  let nameReq = false;
+  function resolveNames(){   // only for records made before logins existed
+    if (!userNs || nameReq) return;
+    const ids = [...new Set(assets().flatMap(a=>[a.holderId,a.approvedBy]).concat(S.history.map(h=>h.userId), (S.myLog||[]).map(h=>h.userId)).filter(x=>x && String(x).startsWith("u_") && !names[x]))];
+    if (!ids.length) return;
+    nameReq = true;
+    userNs.profiles(ids).then(ps => {
+      let changed = false;
+      for (const id of ids){ const n = ps[id]?.name || ""; if (n && names[id] !== n){ names[id]=n; changed=true; } }
+      nameReq = false;
+      if (changed) renderAll();
+    }).catch(()=>{ nameReq=false; });
+  }
+
+  // ---------- view switching ----------
+  function setView(v){
+    view = v;
+    document.querySelectorAll("#viewSwitch button").forEach(b=>b.setAttribute("aria-pressed", b.dataset.view===v));
+    $("#view-manager").hidden = v!=="manager"; $("#view-user").hidden = v!=="user";
+    try{ if(me) localStorage.setItem("wms-view-"+me,v); }catch(e){}
+  }
+  function setPanel(p){
+    mpanel = p;
+    document.querySelectorAll("nav.sub button").forEach(b=>b.setAttribute("aria-selected", b.dataset.mp===p));
+    ["approvals","assets","locations","holds","report","accounts"].forEach(k=>$("#mp-"+k).hidden = k!==p);
+    try{ if(me) localStorage.setItem("wms-panel-"+me,p); }catch(e){}
+  }
+  document.querySelectorAll("#viewSwitch button").forEach(b=>b.onclick=()=>setView(b.dataset.view));
+  document.querySelectorAll("nav.sub button").forEach(b=>b.onclick=()=>setPanel(b.dataset.mp));
+
+  // ---------- selects ----------
+  function fillSelect(sel, opts, first){
+    const el=$(sel), keep=el.value;
+    el.innerHTML = (first?`<option value="">${esc(first)}</option>`:"") + opts.map(o=>`<option value="${esc(o.v)}">${esc(o.t)}</option>`).join("");
+    if ([...el.options].some(o=>o.value===keep)) el.value = keep;
+  }
+  function categories(){ return [...new Set(assets().map(a=>a.category).filter(Boolean))].sort(); }
+
+  // ---------- tag generation ----------
+  function nextTags(prefix, n){
+    const p = prefix.trim().toUpperCase().replace(/[^A-Z0-9]/g,"") || "AS";
+    let max = 0;
+    for (const a of assets()){ const m = (a.tag||"").match(new RegExp("^"+p+"-(\\d+)$")); if (m) max = Math.max(max, +m[1]); }
+    return Array.from({length:n},(_,i)=>`${p}-${String(max+i+1).padStart(4,"0")}`);
+  }
+  function updatePreview(){
+    const n = Math.max(1,Math.min(50,+$("#a-qty").value||1)); const t = nextTags($("#a-prefix").value,n);
+    $("#tagPreview").textContent = n===1 ? `Tag: ${t[0]}` : `Tags: ${t[0]} → ${t[n-1]}`;
+  }
+  ["#a-prefix","#a-qty"].forEach(s=>$(s).addEventListener("input",updatePreview));
+
+  // ---------- create assets ----------
+  $("#assetForm").addEventListener("submit", async e => {
+    e.preventDefault();
+    const err=$("#assetErr"); err.hidden=true;
+    const name=$("#a-name").value.trim(), loc=$("#a-loc").value, qty=Math.max(1,Math.min(50,+$("#a-qty").value||1));
+    if (!name || !loc){ err.textContent = !S.locations.size ? "Create a location first, in the Locations tab." : "Enter a product name and choose a location."; err.hidden=false; return; }
+    const serial=$("#a-serial").value.trim();
+    if (serial && qty>1){ err.textContent="A serial number belongs to one unit. Set units to 1, or leave the serial blank."; err.hidden=false; return; }
+    if (serial && assets().some(a=>a.serial===serial)){ err.textContent=`Serial ${serial} is already registered.`; err.hidden=false; return; }
+    const tags = nextTags($("#a-prefix").value, qty);
+    const base = { name, category:$("#a-cat").value.trim(), model:$("#a-model").value.trim(), serial, notes:$("#a-notes").value.trim(), locationId:loc, status:"available", holderId:null, holdSince:null, dueBack:null, purpose:"", createdAt:new Date().toISOString(), createdBy:me };
+    try{
+      for (const tag of tags){ await put("assets", slug(tag), {...base, tag}); }
+      await log({action:"Created", tag: tags.length>1?`${tags[0]}…${tags.at(-1)}`:tags[0], name, note:`${qty} unit${qty>1?"s":""} at ${locCode(loc)}`});
+      toast(`Created ${qty} asset${qty>1?"s":""}: ${tags.length>1?tags[0]+" to "+tags.at(-1):tags[0]}`);
+      ["#a-name","#a-model","#a-serial","#a-notes"].forEach(s=>$(s).value=""); $("#a-qty").value=1; updatePreview();
+    }catch(x){ failed(x); }
+  });
+
+  // ---------- create location ----------
+  $("#locForm").addEventListener("submit", async e => {
+    e.preventDefault();
+    const err=$("#locErr"); err.hidden=true;
+    const code=$("#l-code").value.trim().toUpperCase();
+    if (!code){ err.textContent="Enter a location code."; err.hidden=false; return; }
+    if (locs().some(l=>l.code===code)){ err.textContent=`${code} already exists.`; err.hidden=false; return; }
+    try{
+      await put("locations", slug(code), {code, type:$("#l-type").value, zone:$("#l-zone").value.trim(), description:$("#l-desc").value.trim(), createdAt:new Date().toISOString()});
+      await log({action:"Location added", tag:code, name:$("#l-zone").value.trim(), note:""});
+      toast(`Location ${code} created`); ["#l-code","#l-desc"].forEach(s=>$(s).value="");
+    }catch(x){ failed(x); }
+  });
+
+  // ---------- dialog ----------
+  const dlg=$("#dlg"), dform=$("#dlgForm"); let onDlg=null;
+  function openDlg(html, handler){ dform.innerHTML=html; onDlg=handler; dlg.showModal(); const f=dform.querySelector("input,select,textarea"); if(f) f.focus(); }
+  dform.addEventListener("submit", async e => { e.preventDefault(); if (e.submitter && e.submitter.value==="cancel"){ dlg.close(); return; } const btn=dform.querySelector("button[value=ok]"); if(btn) btn.disabled=true; try{ const close = await onDlg(); if (close!==false) dlg.close(); } finally { if(btn) btn.disabled=false; } });
+  const dlgBtns = ok => `<div class="row end"><button class="btn quiet" value="cancel">Cancel</button><button class="btn" value="ok">${esc(ok)}</button></div>`;
+
+  // ---------- request / return / manage ----------
+  async function lockAndCheck(id, expect){
+    const r = await B.getLocked("assets", id, me||"anon");
+    if (r.busy) { toast("Someone else is updating this asset right now. Try again in a few seconds."); return null; }
+    const a = r.doc;
+    if (!a || !expect(a)) { toast("This asset was just taken or changed. The list has been refreshed."); return null; }
+    return a;
+  }
+  function requestAsset(id){
+    const a=S.assets.get(id); if(!a) return;
+    if (!me){ toast("Sign in to request assets."); return; }
+    openDlg(`<h3>Request ${esc(a.name)}</h3>
+      <p class="hint"><span class="tag">${esc(a.tag)}</span> · stored at <span class="bin">${esc(locCode(a.locationId))}</span></p>
+      <label class="f">Return by<input type="date" id="d-due" required min="${today()}" value="${addDays(7)}"></label>
+      <label class="f">Purpose<textarea id="d-purpose" placeholder="e.g. Firmware test for SWQA, unit to desk 4F"></textarea></label>
+      <p class="hint">A manager reviews your request. Once approved, collect the item and tap Accept to start the loan.</p>
+      ${dlgBtns("Send request")}`, async () => {
+      const due=$("#d-due").value, purpose=$("#d-purpose").value.trim();
+      if (!due){ toast("Choose a return date."); return false; }
+      try{
+        const cur = await lockAndCheck(id, x=>x.status==="available"); if(!cur) return;
+        await patch("assets", id, {status:"requested", holderId:me, requestedAt:new Date().toISOString(), holdSince:null, dueBack:due, purpose, approvedBy:null, approvedAt:null, managerNote:""});
+        await log({action:"Requested", tag:a.tag, name:a.name, note:`Due ${due}${purpose?" · "+purpose:""}`, assetId:id, requesterId:me});
+        toast(`Request for ${a.tag} sent to the manager`);
+      }catch(x){ failed(x); }
+    });
+  }
+  const clearReturn = {returnRequestedAt:null, returnCondition:null, returnNote:""};
+  const clearLoan = {holderId:null, requestedAt:null, holdSince:null, dueBack:null, purpose:"", approvedBy:null, approvedAt:null, managerNote:"", returnDeclined:"", ...clearReturn};
+  function approveReturn(id){
+    const a=S.assets.get(id); if(!a) return;
+    openDlg(`<h3>Approve return</h3>
+      <p class="hint"><span class="tag">${esc(a.tag)}</span> · ${esc(a.name)} from <b>${esc(holderName(a.holderId))}</b>${a.returnNote?`<br>Their note: ${esc(a.returnNote)}`:""}</p>
+      <label class="f">Condition after inspection<select id="d-cond"><option value="good" ${a.returnCondition!=="check"?"selected":""}>Complete and working – back to available stock</option><option value="check" ${a.returnCondition==="check"?"selected":""}>Needs repair or check – hold back from loans</option></select></label>
+      <label class="f">Put back at<select id="d-loc">${locs().map(l=>`<option value="${esc(l.id)}" ${l.id===a.locationId?"selected":""}>${esc(l.code)}${l.zone?" · "+esc(l.zone):""}</option>`).join("")}</select></label>
+      <label class="f">Inspection note<input id="d-note" placeholder="Optional"></label>
+      ${dlgBtns("Approve return")}`, async () => {
+      const cond=$("#d-cond").value, loc=$("#d-loc").value||a.locationId, note=$("#d-note").value.trim();
+      try{
+        const cur = await lockAndCheck(id, x=>x.status==="return_pending"); if(!cur) return;
+        await patch("assets", id, {status: cond==="good"?"available":"inspect", ...clearLoan, locationId:loc});
+        await log({action:"Return approved", tag:a.tag, name:a.name, note:`${cond==="good"?"Complete":"Needs check"} → ${locCode(loc)}${note?" · "+note:""}`, assetId:id, requesterId:a.holderId});
+        toast(`${a.tag} checked back into ${locCode(loc)}`);
+      }catch(x){ failed(x); }
+    });
+  }
+  function declineReturn(id){
+    const a=S.assets.get(id); if(!a) return;
+    openDlg(`<h3>Decline return</h3>
+      <p class="hint"><span class="tag">${esc(a.tag)}</span> · ${esc(a.name)} stays on loan to <b>${esc(holderName(a.holderId))}</b> until they return it complete.</p>
+      <label class="f">What's wrong<input id="d-note" required placeholder="e.g. Missing USB-C cable and wrist rest"></label>
+      ${dlgBtns("Decline return")}`, async () => {
+      const note=$("#d-note").value.trim();
+      if (!note){ toast("Tell the person what's missing or wrong."); return false; }
+      try{
+        const cur = await lockAndCheck(id, x=>x.status==="return_pending"); if(!cur) return;
+        await patch("assets", id, {status:"on_hold", returnDeclined:note, ...clearReturn});
+        await log({action:"Return declined", tag:a.tag, name:a.name, note, assetId:id, requesterId:a.holderId});
+        toast(`Return of ${a.tag} declined`);
+      }catch(x){ failed(x); }
+    });
+  }
+  function approveAsset(id){
+    const a=S.assets.get(id); if(!a) return;
+    openDlg(`<h3>Approve loan</h3>
+      <p class="hint"><span class="tag">${esc(a.tag)}</span> · ${esc(a.name)} for <b>${esc(holderName(a.holderId))}</b>${a.purpose?`<br>Purpose: ${esc(a.purpose)}`:""}</p>
+      <label class="f">Return by<input type="date" id="d-due" required min="${today()}" value="${esc(a.dueBack||addDays(7))}"></label>
+      <label class="f">Note to requester<input id="d-note" placeholder="e.g. Collect from counter after 2pm"></label>
+      ${dlgBtns("Approve")}`, async () => {
+      const due=$("#d-due").value, note=$("#d-note").value.trim();
+      try{
+        const cur = await lockAndCheck(id, x=>x.status==="requested"); if(!cur) return;
+        await patch("assets", id, {status:"approved", dueBack:due, approvedBy:me, approvedAt:new Date().toISOString(), managerNote:note});
+        await log({action:"Approved", tag:a.tag, name:a.name, note:`Due ${due}${note?" · "+note:""}`, assetId:id, requesterId:a.holderId});
+        toast(`Approved ${a.tag} for ${holderName(a.holderId)}`);
+      }catch(x){ failed(x); }
+    });
+  }
+  function rejectAsset(id){
+    const a=S.assets.get(id); if(!a) return;
+    const wasApproved = a.status==="approved";
+    openDlg(`<h3>${wasApproved?"Cancel approval":"Reject request"}</h3>
+      <p class="hint"><span class="tag">${esc(a.tag)}</span> · ${esc(a.name)} for <b>${esc(holderName(a.holderId))}</b>. The item goes back to available stock.</p>
+      <label class="f">Reason (the requester will see this)<input id="d-note" required placeholder="e.g. Reserved for QA run this week"></label>
+      ${dlgBtns(wasApproved?"Cancel approval":"Reject")}`, async () => {
+      const note=$("#d-note").value.trim();
+      if (!note){ toast("Enter a reason so the requester knows why."); return false; }
+      try{
+        const cur = await lockAndCheck(id, x=>x.status===a.status); if(!cur) return;
+        await patch("assets", id, {status:"available", ...clearLoan});
+        await log({action: wasApproved?"Approval cancelled":"Rejected", tag:a.tag, name:a.name, note, assetId:id, requesterId:a.holderId});
+        toast(`${a.tag} ${wasApproved?"approval cancelled":"request rejected"}`);
+      }catch(x){ failed(x); }
+    });
+  }
+  function acceptAsset(id){
+    const a=S.assets.get(id); if(!a) return;
+    openDlg(`<h3>Accept ${esc(a.name)}</h3>
+      <p class="hint"><span class="tag">${esc(a.tag)}</span> · return by <b>${fmtDate(a.dueBack)}</b>${a.managerNote?`<br>Manager's note: ${esc(a.managerNote)}`:""}</p>
+      <p class="hint">Confirm you've received this item. It will be on hold under your name until you return it.</p>
+      ${dlgBtns("I've received it")}`, async () => {
+      try{
+        const cur = await lockAndCheck(id, x=>x.status==="approved" && x.holderId===me); if(!cur) return;
+        await patch("assets", id, {status:"on_hold", holdSince:new Date().toISOString()});
+        await log({action:"Accepted", tag:a.tag, name:a.name, note:`Loan started · due ${a.dueBack}`, assetId:id, requesterId:me});
+        toast(`${a.tag} is now on loan to you`);
+      }catch(x){ failed(x); }
+    });
+  }
+  function cancelRequest(id){
+    const a=S.assets.get(id); if(!a) return;
+    openDlg(`<h3>Withdraw request?</h3><p class="hint"><span class="tag">${esc(a.tag)}</span> · ${esc(a.name)} goes back to available stock.</p>${dlgBtns("Withdraw request")}`, async () => {
+      try{
+        const cur = await lockAndCheck(id, x=>(x.status==="requested"||x.status==="approved") && x.holderId===me); if(!cur) return;
+        await patch("assets", id, {status:"available", ...clearLoan});
+        await log({action:"Withdrawn", tag:a.tag, name:a.name, note:"", assetId:id, requesterId:me});
+        toast("Request withdrawn");
+      }catch(x){ failed(x); }
+    });
+  }
+  function returnAsset(id, byManager){
+    const a=S.assets.get(id); if(!a) return;
+    openDlg(`<h3>${byManager?"Check in":"Return"} ${esc(a.name)}</h3>
+      <p class="hint"><span class="tag">${esc(a.tag)}</span>${byManager?` · held by ${esc(holderName(a.holderId))}`:""}</p>
+      ${byManager?"":`<p class="hint">A manager will inspect the item and its accessories before the return is approved.${a.returnDeclined?`<br><b>Last time:</b> ${esc(a.returnDeclined)}`:""}</p>`}
+      <label class="f">Condition<select id="d-cond"><option value="good">${byManager?"Good – back to available stock":"Complete, with all accessories"}</option><option value="check">${byManager?"Damaged or faulty – needs check":"Damaged, faulty or something missing"}</option></select></label>
+      ${byManager?`<label class="f">Put back at<select id="d-loc">${locs().map(l=>`<option value="${esc(l.id)}" ${l.id===a.locationId?"selected":""}>${esc(l.code)}${l.zone?" · "+esc(l.zone):""}</option>`).join("")}</select></label>`:""}
+      <label class="f">${byManager?"Note":"What are you returning?"}<input id="d-note" placeholder="${byManager?"Optional":"e.g. Laptop, charger, carry sleeve"}"></label>
+      ${dlgBtns(byManager?"Check in":"Submit return")}`, async () => {
+      const cond=$("#d-cond").value, loc=(byManager && $("#d-loc").value)||a.locationId, note=$("#d-note").value.trim();
+      try{
+        const cur = await lockAndCheck(id, x=>(byManager ? (x.status==="on_hold"||x.status==="return_pending") : (x.status==="on_hold" && x.holderId===me))); if(!cur) return;
+        if (!byManager){
+          await patch("assets", id, {status:"return_pending", returnRequestedAt:new Date().toISOString(), returnCondition:cond, returnNote:note});
+          await log({action:"Return submitted", tag:a.tag, name:a.name, note:`${cond==="good"?"Complete":"Reported issue"}${note?" · "+note:""}`, assetId:id, requesterId:me});
+          toast(`Return of ${a.tag} sent for inspection`);
+          return;
+        }
+        await patch("assets", id, {status: cond==="good"?"available":"inspect", ...clearLoan, locationId:loc});
+        await log({action: byManager?"Checked in by manager":"Returned", tag:a.tag, name:a.name, note:`${cond==="good"?"Good":"Needs check"} → ${locCode(loc)}${note?" · "+note:""}`, assetId:id, heldBy:a.holderId, requesterId:a.holderId});
+        toast(`${a.tag} returned to ${locCode(loc)}`);
+      }catch(x){ failed(x); }
+    });
+  }
+  function manageAsset(id){
+    const a=S.assets.get(id); if(!a) return;
+    const held = OUT.includes(a.status);
+    openDlg(`<h3>${esc(a.tag)} · ${esc(a.name)}</h3>
+      <div class="grid">
+        <label class="f">Status<select id="d-st" ${held?"disabled":""}>${["available","inspect","retired"].map(s=>`<option value="${s}" ${a.status===s?"selected":""}>${STATUS[s]}</option>`).join("")}${held?`<option selected>${STATUS[a.status]}</option>`:""}</select></label>
+        <label class="f">Location<select id="d-loc">${locs().map(l=>`<option value="${esc(l.id)}" ${l.id===a.locationId?"selected":""}>${esc(l.code)}</option>`).join("")}</select></label>
+        <label class="f">Serial number<input id="d-serial" value="${esc(a.serial)}"></label>
+        <label class="f">Category<input id="d-cat" value="${esc(a.category)}"></label>
+      </div>
+      <label class="f">Notes / specs<textarea id="d-notes">${esc(a.notes||"")}</textarea></label>
+      ${held?`<p class="hint">${STATUS[a.status]} for ${esc(holderName(a.holderId))}. ${a.status==="on_hold"?"Use “Check in” on the On hold tab to release it.":"Approve or reject it on the Approvals tab."}</p>`:""}
+      <div class="row" style="justify-content:space-between"><button class="btn danger" value="delete" type="button" id="d-del">Delete asset</button>${dlgBtns("Save changes").replace('<div class="row end">','<div class="row">')}</div>`, async () => {
+      const upd = {locationId:$("#d-loc").value, serial:$("#d-serial").value.trim(), category:$("#d-cat").value.trim(), notes:$("#d-notes").value.trim()};
+      if (!held) upd.status = $("#d-st").value;
+      try{
+        await patch("assets", id, upd);
+        const moved = upd.locationId!==a.locationId, st = upd.status && upd.status!==a.status;
+        if (moved||st) await log({action: moved?"Moved":"Status changed", tag:a.tag, name:a.name, note:[moved?`${locCode(a.locationId)} → ${locCode(upd.locationId)}`:"", st?STATUS[upd.status]:""].filter(Boolean).join(" · "), assetId:id});
+        toast(`${a.tag} updated`);
+      }catch(x){ failed(x); }
+    });
+    $("#d-del").onclick = () => {
+      if (held){ toast("Release the asset (check in or reject the request) before deleting it."); return; }
+      const b=$("#d-del");
+      if (b.dataset.armed){ dlg.close(); del("assets",id).then(()=>{ log({action:"Deleted", tag:a.tag, name:a.name, note:""}); toast(`${a.tag} deleted`); }).catch(failed); }
+      else { b.dataset.armed="1"; b.textContent="Tap again to delete"; }
+    };
+  }
+  function deleteLocation(id){
+    const l=S.locations.get(id); if(!l) return;
+    const n=assets().filter(a=>a.locationId===id).length;
+    if (n){ toast(`Move the ${n} asset${n>1?"s":""} at ${l.code} first.`); return; }
+    openDlg(`<h3>Delete location ${esc(l.code)}?</h3><p class="hint">No assets are stored here. This can't be undone.</p>${dlgBtns("Delete location")}`, async ()=>{ try{ await del("locations",id); toast(`${l.code} deleted`);}catch(x){failed(x);} });
+  }
+  document.addEventListener("click", e => {
+    const b = e.target.closest("[data-act]"); if(!b) return;
+    const {act,id} = b.dataset;
+    if (act==="req") requestAsset(id); else if (act==="ret") returnAsset(id,false); else if (act==="checkin") returnAsset(id,true);
+    else if (act==="approve") approveAsset(id); else if (act==="reject") rejectAsset(id);
+    else if (act==="retok") approveReturn(id); else if (act==="retno") declineReturn(id);
+    else if (act==="accept") acceptAsset(id); else if (act==="withdraw") cancelRequest(id);
+    else if (act==="manage") manageAsset(id); else if (act==="delloc") deleteLocation(id);
+  });
+
+  // ---------- renderers ----------
+  const notesLine = a => a.notes ? `<div class="sub2" style="max-width:52ch;white-space:pre-line">${esc(a.notes)}</div>` : "";
+  function table(head, rows, emptyHtml){
+    if (!rows.length) return `<div class="empty">${emptyHtml}</div>`;
+    return `<div class="tablewrap"><table><thead><tr>${head.map(h=>`<th${h.startsWith("#")?' class="num"':""}>${esc(h.replace(/^#/,""))}</th>`).join("")}</tr></thead><tbody>${rows.join("")}</tbody></table></div>`;
+  }
+  function match(a,q){ if(!q) return true; q=q.toLowerCase(); return [a.tag,a.name,a.serial,a.model,a.category,a.notes,locCode(a.locationId),holderName(a.holderId)].some(v=>String(v||"").toLowerCase().includes(q)); }
+
+  function renderAssets(){
+    const q=$("#a-search").value.trim(), fs=$("#a-fstatus").value, fl=$("#a-floc").value;
+    const list = assets().filter(a=>match(a,q) && (!fs||a.status===fs) && (!fl||a.locationId===fl)).sort((x,y)=>x.tag.localeCompare(y.tag,undefined,{numeric:true}));
+    $("#assetTable").innerHTML = table(["Tag","Product","Category","Serial","Location","Status","Holder",""], list.map(a=>`<tr>
+      <td class="tag">${esc(a.tag)}</td><td>${esc(a.name)}${a.model?`<div class="sub2">${esc(a.model)}</div>`:""}${notesLine(a)}</td>
+      <td>${esc(a.category||"–")}</td><td class="tag" style="font-weight:500">${esc(a.serial||"–")}</td>
+      <td><span class="bin">${esc(locCode(a.locationId))}</span></td><td>${pill(a)}</td>
+      <td>${OUT.includes(a.status)?esc(holderName(a.holderId))+`<div class="sub2">Due ${fmtDate(a.dueBack)}</div>`:"–"}</td>
+      <td><button class="btn quiet sm" data-act="manage" data-id="${esc(a.id)}">Edit</button></td></tr>`),
+      S.assets.size ? "No assets match this search." : "No assets yet. Fill in the form above to create your first one.");
+  }
+  function renderLocations(){
+    const all = assets();
+    $("#locTable").innerHTML = table(["Code","Type","Zone","Description","#Assets","#Available","#On hold",""], locs().map(l=>{
+      const here=all.filter(a=>a.locationId===l.id);
+      return `<tr><td><span class="bin">${esc(l.code)}</span></td><td>${esc(l.type)}</td><td>${esc(l.zone||"–")}</td><td>${esc(l.description||"–")}</td>
+      <td class="num">${here.length}</td><td class="num">${here.filter(a=>a.status==="available").length}</td><td class="num">${here.filter(a=>a.status==="on_hold").length}</td>
+      <td><button class="btn quiet sm" data-act="delloc" data-id="${esc(l.id)}">Delete</button></td></tr>`;
+    }), "No locations yet. Create shelves, racks or bins above, then assign assets to them.");
+  }
+  function renderHolds(){
+    const q=$("#h-search").value.trim(), od=$("#h-overdue").checked;
+    const held = assets().filter(a=>(a.status==="on_hold"||a.status==="return_pending") && match(a,q) && (!od||isOverdue(a)));
+    const groups = {}; held.forEach(a=>(groups[a.holderId]=groups[a.holderId]||[]).push(a));
+    const keys = Object.keys(groups).sort((x,y)=>holderName(x).localeCompare(holderName(y)));
+    $("#holdList").innerHTML = keys.length ? keys.map(k=>{
+      const g=groups[k].sort((x,y)=>(x.dueBack||"").localeCompare(y.dueBack||"")), ov=g.filter(isOverdue).length;
+      return `<div class="holder"><div class="holder-h"><strong>${esc(holderName(k))}</strong><span class="row" style="gap:8px"><span class="sub2">${g.length} asset${g.length>1?"s":""}</span>${ov?`<span class="pill s-overdue">${ov} overdue</span>`:""}</span></div>
+      <div style="overflow-x:auto"><table><thead><tr><th>Tag</th><th>Product</th><th>Since</th><th>Due back</th><th>Purpose</th><th></th></tr></thead><tbody>${g.map(a=>`<tr>
+        <td class="tag">${esc(a.tag)}</td><td>${esc(a.name)}</td><td>${fmtDate(a.holdSince)}</td><td>${fmtDate(a.dueBack)} ${isOverdue(a)?'<span class="pill s-overdue">Overdue</span>':""}${a.status==="return_pending"?' <span class="pill s-return_pending">Return pending</span>':""}</td>
+        <td class="sub2">${esc(a.purpose||"–")}</td><td><button class="btn quiet sm" data-act="checkin" data-id="${esc(a.id)}">Check in</button></td></tr>`).join("")}</tbody></table></div></div>`;
+    }).join("") : `<div class="empty">${od?"Nothing is overdue.":"Nobody is holding any assets right now."}</div>`;
+  }
+  function renderApprovals(){
+    const pend = assets().filter(a=>a.status==="requested").sort((x,y)=>(x.requestedAt||"").localeCompare(y.requestedAt||""));
+    $("#pendList").innerHTML = table(["Requested","Person","Tag","Product","Location","Return by","Purpose",""], pend.map(a=>`<tr>
+      <td style="white-space:nowrap">${fmtDT(a.requestedAt)}</td><td><b>${esc(holderName(a.holderId))}</b></td><td class="tag">${esc(a.tag)}</td><td>${esc(a.name)}</td>
+      <td><span class="bin">${esc(locCode(a.locationId))}</span></td><td>${fmtDate(a.dueBack)}</td><td class="sub2">${esc(a.purpose||"–")}</td>
+      <td><div class="row" style="flex-wrap:nowrap;gap:6px"><button class="btn sm" data-act="approve" data-id="${esc(a.id)}">Approve</button><button class="btn danger sm" data-act="reject" data-id="${esc(a.id)}">Reject</button></div></td></tr>`),
+      "No requests waiting. New requests from staff appear here.");
+    const rets = assets().filter(a=>a.status==="return_pending").sort((x,y)=>(x.returnRequestedAt||"").localeCompare(y.returnRequestedAt||""));
+    $("#retList").innerHTML = table(["Submitted","Person","Tag","Product","Reported","Their note","Usual location",""], rets.map(a=>`<tr>
+      <td style="white-space:nowrap">${fmtDT(a.returnRequestedAt)}</td><td><b>${esc(holderName(a.holderId))}</b></td><td class="tag">${esc(a.tag)}</td><td>${esc(a.name)}</td>
+      <td>${a.returnCondition==="check"?'<span class="pill s-overdue">Issue reported</span>':'<span class="pill s-available">Complete</span>'}</td>
+      <td class="sub2">${esc(a.returnNote||"–")}</td><td><span class="bin">${esc(locCode(a.locationId))}</span></td>
+      <td><div class="row" style="flex-wrap:nowrap;gap:6px"><button class="btn sm" data-act="retok" data-id="${esc(a.id)}">Approve</button><button class="btn danger sm" data-act="retno" data-id="${esc(a.id)}">Decline</button></div></td></tr>`),
+      "No returns waiting for inspection.");
+    const appr = assets().filter(a=>a.status==="approved").sort((x,y)=>(x.approvedAt||"").localeCompare(y.approvedAt||""));
+    $("#apprList").innerHTML = table(["Approved","Person","Tag","Product","Return by","Note",""], appr.map(a=>`<tr>
+      <td style="white-space:nowrap">${fmtDT(a.approvedAt)}<div class="sub2">by ${esc(holderName(a.approvedBy))}</div></td><td><b>${esc(holderName(a.holderId))}</b></td><td class="tag">${esc(a.tag)}</td><td>${esc(a.name)}</td>
+      <td>${fmtDate(a.dueBack)}</td><td class="sub2">${esc(a.managerNote||"–")}</td>
+      <td><button class="btn quiet sm" data-act="reject" data-id="${esc(a.id)}">Cancel approval</button></td></tr>`),
+      "Nothing waiting for pickup.");
+  }
+  function stats(){
+    const all=assets(), c={total:all.length,available:0,requested:0,approved:0,on_hold:0,return_pending:0,inspect:0,retired:0,overdue:0};
+    all.forEach(a=>{ c[a.status]=(c[a.status]||0)+1; if(isOverdue(a)) c.overdue++; });
+    return c;
+  }
+  function stackBar(av,oh,ot,total){
+    if(!total) return "";
+    const w=n=>(n/total*100).toFixed(1)+"%";
+    return `<div class="bar" title="${av} available, ${oh} on hold, ${ot} other"><i style="width:${w(av)};background:var(--ok)"></i><i style="width:${w(oh)};background:var(--accent)"></i><i style="width:${w(ot)};background:var(--idle)"></i></div>`;
+  }
+  function groupRows(keyFn, labelFn){
+    const m={}; assets().forEach(a=>{ const k=keyFn(a); (m[k]=m[k]||[]).push(a); });
+    return Object.keys(m).sort((x,y)=>labelFn(x).localeCompare(labelFn(y),undefined,{numeric:true})).map(k=>{
+      const g=m[k], av=g.filter(a=>a.status==="available").length, oh=g.filter(a=>a.status==="on_hold").length;
+      return `<tr><td>${labelFn(k,true)}</td><td class="num">${g.length}</td><td class="num">${av}</td><td class="num">${oh}</td><td style="width:30%">${stackBar(av,oh,g.length-av-oh,g.length)}</td></tr>`;
+    });
+  }
+  function renderReport(){
+    const c=stats();
+    $("#r-stamp").textContent = `Generated ${fmtDT(new Date().toISOString())} · ${S.locations.size} locations`;
+    const tiles=[["Total assets",c.total],["Available",c.available],["Pending approval",c.requested,c.requested>0],["Awaiting pickup",c.approved],["Returns to inspect",c.return_pending,c.return_pending>0],["On hold",c.on_hold],["Overdue",c.overdue,c.overdue>0],["Needs check",c.inspect],["Retired",c.retired]];
+    $("#r-tiles").innerHTML = tiles.map(([l,v,al])=>`<div class="tile${al?" alert":""}"><b>${v}</b><span>${l}</span></div>`).join("");
+    const H=["Location","#Total","#Avail.","#On hold",""];
+    $("#r-loc").innerHTML = table(H, groupRows(a=>a.locationId, (k,html)=>html?`<span class="bin">${esc(locCode(k))}</span>`:locCode(k)), "No stock recorded yet.");
+    $("#r-cat").innerHTML = table(["Category","#Total","#Avail.","#On hold",""], groupRows(a=>a.category||"Uncategorised", k=>esc(k)), "No stock recorded yet.");
+    const od=assets().filter(isOverdue).sort((x,y)=>x.dueBack.localeCompare(y.dueBack));
+    $("#r-overdue").innerHTML = table(["Tag","Product","Holder","Due back","#Days late"], od.map(a=>`<tr><td class="tag">${esc(a.tag)}</td><td>${esc(a.name)}</td><td>${esc(holderName(a.holderId))}</td><td>${fmtDate(a.dueBack)}</td><td class="num">${Math.round((new Date(today())-new Date(a.dueBack))/864e5)}</td></tr>`), "Nothing is overdue.");
+    $("#r-hist").innerHTML = table(["When","Action","Item","By","Detail"], S.history.slice(0,40).map(h=>`<tr><td style="white-space:nowrap">${fmtDT(h.at)}</td><td>${esc(h.action)}</td><td><span class="tag">${esc(h.tag)}</span> <span class="sub2">${esc(h.name||"")}</span></td><td>${esc(holderName(h.userId))}</td><td class="sub2">${esc(h.note||"")}</td></tr>`), "No movements recorded yet.");
+    const ex=assets().filter(a=>a.example).length + locs().filter(l=>l.example).length;
+    $("#exHint").textContent = ex ? `${ex} example records are loaded (marked with tags starting EX-). Remove them before you start using the desk for real.` : "Load a small set of example locations and Razer products to try the desk out. Example tags start with EX- and can be removed in one go.";
+    $("#exLoad").disabled = !!ex; $("#exClear").disabled = !ex;
+  }
+  function renderUser(){
+    const reqs = assets().filter(a=>(a.status==="requested"||a.status==="approved") && a.holderId===me).sort((x,y)=>(x.requestedAt||"").localeCompare(y.requestedAt||""));
+    $("#myReqs").innerHTML = table(["Tag","Product","Return by","Status",""], reqs.map(a=>`<tr><td class="tag">${esc(a.tag)}</td><td>${esc(a.name)}${a.status==="approved"?`<div class="sub2">Collect from <span class="bin">${esc(locCode(a.locationId))}</span>${a.managerNote?" · "+esc(a.managerNote):""}</div>`:""}</td><td>${fmtDate(a.dueBack)}</td>
+      <td>${a.status==="approved"?'<span class="pill s-approved">Approved – ready to collect</span>':'<span class="pill s-requested">Waiting for manager</span>'}</td>
+      <td><div class="row" style="flex-wrap:nowrap;gap:6px">${a.status==="approved"?`<button class="btn sm" data-act="accept" data-id="${esc(a.id)}">Accept</button>`:""}<button class="btn quiet sm" data-act="withdraw" data-id="${esc(a.id)}">Withdraw</button></div></td></tr>`),
+      "No open requests.");
+    renderMyLog();
+    const mine = assets().filter(a=>(a.status==="on_hold"||a.status==="return_pending") && a.holderId===me).sort((x,y)=>(x.dueBack||"").localeCompare(y.dueBack||""));
+    $("#myList").innerHTML = table(["Tag","Product","Since","Due back",""], mine.map(a=>`<tr><td class="tag">${esc(a.tag)}</td><td>${esc(a.name)}${a.purpose?`<div class="sub2">${esc(a.purpose)}</div>`:""}${a.status==="on_hold"&&a.returnDeclined?`<div class="sub2" style="color:var(--bad)">Return declined: ${esc(a.returnDeclined)}</div>`:""}</td><td>${fmtDate(a.holdSince)}</td><td>${fmtDate(a.dueBack)} ${isOverdue(a)?'<span class="pill s-overdue">Overdue</span>':""}</td>
+      <td>${a.status==="return_pending"?'<span class="pill s-return_pending">Waiting for inspection</span>':`<button class="btn sm" data-act="ret" data-id="${esc(a.id)}">${a.returnDeclined?"Return again":"Return"}</button>`}</td></tr>`), "You're not holding any assets. Search below to request one.");
+    const q=$("#u-search").value.trim(), fc=$("#u-fcat").value, only=$("#u-avail").checked;
+    const list = assets().filter(a=>a.status!=="retired" && match(a,q) && (!fc||a.category===fc) && (!only||a.status==="available")).sort((x,y)=>x.name.localeCompare(y.name)||x.tag.localeCompare(y.tag,undefined,{numeric:true}));
+    $("#userTable").innerHTML = table(["Tag","Product","Category","Location","Status",""], list.map(a=>`<tr><td class="tag">${esc(a.tag)}</td><td>${esc(a.name)}${a.model?`<div class="sub2">${esc(a.model)}</div>`:""}${notesLine(a)}</td><td>${esc(a.category||"–")}</td><td><span class="bin">${esc(locCode(a.locationId))}</span></td><td>${pill(a)}${OUT.includes(a.status)?`<div class="sub2">Back ${fmtDate(a.dueBack)}</div>`:""}</td>
+      <td>${a.status==="available"?`<button class="btn sm" data-act="req" data-id="${esc(a.id)}">Request</button>`:""}</td></tr>`),
+      S.assets.size ? (only?"Nothing available matches. Untick “Available only” to see items that are out.":"No assets match this search.") : "The warehouse has no assets listed yet.");
+  }
+  function myLog(){ return (S.myLog || S.history.filter(h=>h.requesterId===me)).slice(0,60); }
+  function unread(){ return myLog().filter(h=>DECISIONS.includes(h.action) && h.at > seenAt); }
+  function logClass(a){
+    if (/declined|rejected|cancelled/i.test(a)) return "s-overdue";
+    if (/approved|checked in/i.test(a)) return "s-available";
+    if (a==="Accepted") return "s-on_hold";
+    return "s-retired";
+  }
+  function renderMyLog(){
+    const items = myLog(), nu = unread().length;
+    $("#unreadChip").hidden = !nu; $("#unreadChip").textContent = nu ? `${nu} new` : "";
+    $("#markRead").hidden = !nu;
+    const sw = document.querySelector('#viewSwitch [data-view="user"]');
+    if (sw) sw.innerHTML = "My desk" + (nu ? `<span class="n">${nu}</span>` : "");
+    $("#myLog").innerHTML = items.length ? `<div class="log">${items.map(h=>{
+      const dec = DECISIONS.includes(h.action), isNew = dec && h.at > seenAt;
+      const neg = /declined|rejected|cancelled/i.test(h.action);
+      const label = neg ? "Reason" : dec ? "Manager's note" : "Your note";
+      const by = dec ? `<span class="sub2">by ${esc(holderName(h.userId)==="You"?"you":holderName(h.userId))}</span>` : "";
+      return `<div class="log-i${isNew?" new":""}"><div class="log-t">${fmtDT(h.at)}${isNew?'<br><b style="color:var(--warn)">New</b>':""}</div>
+        <div class="log-b"><div class="log-h"><span class="pill ${logClass(h.action)}">${esc(h.action)}</span><span class="tag">${esc(h.tag)}</span><span>${esc(h.name||"")}</span>${by}</div>
+        ${h.note?`<div class="reason ${neg?"":dec?"ok":"plain"}"><b>${label}:</b> ${esc(h.note)}</div>`:(neg?`<div class="reason"><b>Reason:</b> none given</div>`:"")}</div></div>`;
+    }).join("")}</div>` : `<div class="empty">No activity yet. Your requests, approvals, returns and any reasons from the manager will appear here.</div>`;
+  }
+  $("#markRead").onclick = () => {
+    const latest = myLog().reduce((m,h)=>h.at>m?h.at:m, seenAt);
+    seenAt = latest; try{ localStorage.setItem("wms-seen-"+me, seenAt); }catch(e){}
+    renderMyLog();
+  };
+  function renderAll(){
+    const L = locs().map(l=>({v:l.id,t:l.code+(l.zone?" · "+l.zone:"")}));
+    fillSelect("#a-loc", L, L.length?"":"Create a location first");
+    fillSelect("#a-floc", L.map(o=>({v:o.v,t:o.t})), "All locations");
+    const cats = categories();
+    $("#catList").innerHTML = cats.map(c=>`<option value="${esc(c)}">`).join("");
+    fillSelect("#u-fcat", cats.map(c=>({v:c,t:c})), "All categories");
+    $("#n-assets").textContent = S.assets.size; $("#n-locations").textContent = S.locations.size;
+    $("#n-holds").textContent = assets().filter(a=>a.status==="on_hold").length;
+    const np = assets().filter(a=>a.status==="requested"||a.status==="return_pending").length;
+    $("#n-approvals").textContent = np; $("#n-approvals").classList.toggle("hot", np>0);
+    updatePreview();
+    $("#n-accounts").textContent = [...S.accounts.values()].filter(a=>a.active!==false).length;
+    if (!me) return;
+    if (isMgr){ renderApprovals(); renderAssets(); renderLocations(); renderHolds(); renderReport(); renderAccounts(); }
+    renderUser();
+    resolveNames();
+  }
+  ["#a-search","#a-fstatus","#a-floc"].forEach(s=>$(s).addEventListener("input",renderAssets));
+  ["#h-search","#h-overdue"].forEach(s=>$(s).addEventListener("input",renderHolds));
+  ["#u-search","#u-fcat","#u-avail"].forEach(s=>$(s).addEventListener("input",renderUser));
+
+  // ---------- report export ----------
+  function csv(){
+    const cell=v=>{ v=String(v??""); return /[",\n]/.test(v)?`"${v.replace(/"/g,'""')}"`:v; };
+    const rows=[["Tag","Product","Model/SKU","Category","Serial","Location","Status","Holder","On hold since","Due back","Notes / specs"]];
+    assets().sort((x,y)=>x.tag.localeCompare(y.tag,undefined,{numeric:true})).forEach(a=>rows.push([a.tag,a.name,a.model,a.category,a.serial,locCode(a.locationId),isOverdue(a)?"Overdue":STATUS[a.status],a.status==="on_hold"?holderName(a.holderId):"",a.holdSince?a.holdSince.slice(0,10):"",a.dueBack||"",a.notes||""]));
+    return rows.map(r=>r.map(cell).join(",")).join("\n");
+  }
+  $("#r-copy").onclick = async () => {
+    const c=stats();
+    const txt=`Warehouse inventory – ${today()}\nTotal ${c.total} · Available ${c.available} · On hold ${c.on_hold} · Overdue ${c.overdue} · Needs check ${c.inspect} · Retired ${c.retired}\n\n`+csv();
+    try{ await navigator.clipboard.writeText(txt); toast("Summary and full list copied – paste into Excel or email"); }
+    catch(e){ toast("Copy was blocked in this view."); }
+  };
+
+  // ---------- example data ----------
+  $("#exLoad").onclick = async () => {
+    const L=[["EX-A-01","Rack","Zone A – Peripherals","Keyboards and mice"],["EX-A-02","Rack","Zone A – Peripherals","Headsets and audio"],["EX-B-01","Cage","Zone B – High value","Laptops, locked cage"],["EX-C-01","Bin","Zone C – Returns","Inspection bin"]];
+    const P=[["BlackWidow V4 Pro","Keyboard","RZ03-04680100",0,3],["DeathAdder V3 Pro","Mouse","RZ01-04630100",0,4],["Kraken V4","Headset","RZ04-05170100",1,3],["Seiren V3 Chroma","Microphone","RZ19-05060100",1,1],["Blade 16 (2025)","Laptop","RZ09-0528",2,2],["Huntsman V3 Pro","Keyboard","RZ03-04970100",0,1]];
+    try{
+      const ids=[]; for(const [code,type,zone,desc] of L){ const id=slug(code); ids.push(id); await put("locations",id,{code,type,zone,description:desc,example:true,createdAt:new Date().toISOString()}); }
+      let n=1; for(const [name,cat,model,li,q] of P){ for(let i=0;i<q;i++){ const tag=`EX-${String(n++).padStart(4,"0")}`; await put("assets",slug(tag),{tag,name,category:cat,model,serial:"",locationId:ids[li],status:"available",holderId:null,holdSince:null,dueBack:null,purpose:"",example:true,createdAt:new Date().toISOString(),createdBy:me}); } }
+      toast("Example stock loaded");
+    }catch(x){ failed(x); }
+  };
+  $("#exClear").onclick = async () => {
+    const b=$("#exClear");
+    if(!b.dataset.armed){ b.dataset.armed="1"; b.textContent="Tap again to remove"; setTimeout(()=>{delete b.dataset.armed;b.textContent="Remove example data";},4000); return; }
+    delete b.dataset.armed; b.textContent="Remove example data";
+    try{ for(const a of assets().filter(a=>a.example)) await del("assets",a.id); for(const l of locs().filter(l=>l.example)) await del("locations",l.id); toast("Example data removed"); }catch(x){ failed(x); }
+  };
+
+  // ---------- save, import and export files ----------
+  async function saveFile(filename, text, type){
+    if (dl){ try{ const r = await dl.save({filename, data:text}); return !!(r && r.status); }catch(e){ return false; } }
+    try{
+      const url = URL.createObjectURL(new Blob([text], {type})), link = document.createElement("a");
+      link.href = url; link.download = filename; document.body.appendChild(link); link.click(); link.remove();
+      setTimeout(()=>URL.revokeObjectURL(url), 2000); return true;
+    }catch(e){ return false; }
+  }
+  $("#r-csv").onclick = async () => { if (await saveFile(`warehouse-inventory-${today()}.csv`, csv(), "text/csv")) toast("Inventory report saved"); };
+  $("#expBtn").onclick = async () => {
+    const strip = ({id, ...d}) => ({id, ...d});
+    const data = {exportedAt:new Date().toISOString(), locations:locs().map(strip), assets:assets().map(strip)};
+    if (await saveFile(`wms-data-export-${today()}.json`, JSON.stringify(data, null, 1), "application/json")) toast(`Exported ${data.assets.length} assets and ${data.locations.length} locations`);
+  };
+  $("#impBtn").onclick = async () => {
+    const file = $("#impFile").files[0];
+    if (!file){ toast("Choose the export file first."); return; }
+    let data; try{ data = JSON.parse(await file.text()); }catch(e){ toast("That file isn't a desk export."); return; }
+    const L = (data.locations||[]).filter(x=>x && x.id && x.code && !S.locations.has(x.id));
+    const As = (data.assets||[]).filter(x=>x && x.id && x.tag && !S.assets.has(x.id))
+      .map(x => OUT.includes(x.status) ? {...x, status:"available", ...clearLoan} : x);
+    if (!L.length && !As.length){ toast("Nothing new to import. Everything in that file is already here."); return; }
+    const btn = $("#impBtn"); btn.disabled = true;
+    try{
+      await setMany("locations", L); await setMany("assets", As);
+      await log({action:"Imported", tag:`${As.length} assets`, name:file.name, note:`${L.length} locations, ${As.length} assets`});
+      $("#impMsg").textContent = `Imported ${As.length} assets and ${L.length} locations. Items already on the desk were skipped.`;
+      toast("Import finished");
+    }catch(x){ failed(x); }
+    finally{ btn.disabled = false; }
+  };
+
+  // ---------- accounts tab (store manager) ----------
+  $("#u-gen").onclick = () => { $("#u-pw").value = genPw(); $("#u-pw").type = "text"; };
+  function showCreds(title, acct, pw, extra){
+    const site = A.kind==="firebase" ? location.href.split("#")[0] : "";
+    openDlg(`<h3>${esc(title)}</h3>
+      <p class="hint">${esc(extra)}</p>
+      <div class="cred"><span>Name</span>${esc(acct.name)}<span>${esc(A.loginLabel)}</span>${esc(acct.login)}<span>Password</span>${esc(pw)}${site?`<span>Website</span>${esc(site)}`:""}</div>
+      <p class="hint">This password won't be shown again. They'll set their own password when they first log in.</p>
+      <div class="row end"><button class="btn quiet" type="button" id="credCopy">Copy details</button><button class="btn" value="ok">Done</button></div>`, async()=>{});
+    $("#credCopy").onclick = async () => {
+      try{ await navigator.clipboard.writeText(`Warehouse Asset Desk login\n${site?`Website: ${site}\n`:""}${A.loginLabel}: ${acct.login}\nTemporary password: ${pw}`); toast("Login details copied"); }
+      catch(e){ toast("Copy was blocked. Select the details and copy them by hand."); }
+    };
+  }
+  $("#accForm").addEventListener("submit", async e => {
+    e.preventDefault();
+    const err = $("#accErr"); err.hidden = true;
+    const name = $("#u-name").value.trim(), login = A.norm($("#u-user").value), role = $("#u-role").value, pw = $("#u-pw").value;
+    const bad = !name ? "Enter the person's full name." : A.check(login) || pwProblem(pw);
+    if (bad){ err.textContent = bad; err.hidden = false; return; }
+    const btn = $("#accForm button[type=submit]"); btn.disabled = true;
+    try{
+      const acct = await A.create({name, login, role, pw});
+      await log({action:"Account created", tag:login, name, note:ROLE[role]});
+      ["#u-name","#u-user","#u-pw"].forEach(s=>$(s).value=""); $("#u-pw").type = "password"; $("#u-role").value = "staff";
+      showCreds("Account created", acct, pw, `${ROLE[role]} account is ready. Send these details to ${name}.`);
+    }catch(x){ err.textContent = x.message || "Couldn't create the account."; err.hidden = false; }
+    finally{ btn.disabled = false; }
+  });
+  function renderAccounts(){
+    const list = [...S.accounts.values()].sort((a,b)=>(!a.active)-(!b.active) || (a.role!=="admin")-(b.role!=="admin") || (a.name||"").localeCompare(b.name||""));
+    $("#accTable").innerHTML = table(["Name",A.loginLabel,"Role","Status","Last login",""], list.map(a=>{
+      const self = a.id===me, off = !a.active;
+      return `<tr><td><b>${esc(a.name)}</b>${self?' <span class="sub2">(you)</span>':""}</td><td class="tag">${esc(a.login)}</td>
+      <td><span class="pill role-${a.role}">${ROLE[a.role]||a.role}</span></td>
+      <td>${off?'<span class="pill s-retired">Disabled</span>':a.mustChange?'<span class="pill s-requested">Not logged in yet</span>':'<span class="pill s-available">Active</span>'}</td>
+      <td>${fmtDT(a.lastLoginAt)}</td>
+      <td><div class="row" style="flex-wrap:nowrap;gap:6px">
+        <button class="btn quiet sm" data-acc="reset" data-id="${esc(a.id)}">Reset password</button>
+        ${self?"":`<button class="btn quiet sm" data-acc="role" data-id="${esc(a.id)}">${a.role==="admin"?"Make staff":"Make store manager"}</button>
+        <button class="btn ${off?"quiet":"danger"} sm" data-acc="toggle" data-id="${esc(a.id)}">${off?"Enable":"Disable"}</button>`}
+      </div></td></tr>`;
+    }), "No accounts yet.");
+  }
+  document.addEventListener("click", e => {
+    const b = e.target.closest("[data-acc]"); if (!b || !isMgr) return;
+    const a = S.accounts.get(b.dataset.id); if (!a) return;
+    const act = b.dataset.acc;
+    if (act==="reset"){
+      const byEmail = A.kind==="firebase";
+      openDlg(`<h3>Reset password for ${esc(a.name)}</h3>
+        <p class="hint">${byEmail ? `Firebase will email a password reset link to <b>${esc(a.login)}</b>. They choose the new password themselves.` : "A new temporary password will be created. They'll be asked to choose their own password at their next login."}</p>
+        ${dlgBtns(byEmail ? "Send reset email" : "Reset password")}`, async()=>{
+        try{
+          const r = await A.reset(a);
+          await log({action:"Password reset", tag:a.login, name:a.name, note:byEmail?"Reset email sent":""});
+          if (r.tempPw) setTimeout(()=>showCreds("Password reset", a, r.tempPw, `Send the new temporary password to ${a.name}.`), 0);
+          else toast(`Reset email sent to ${a.login}`);
+        }catch(x){ toast(x.message || "Couldn't reset the password."); }
+      });
+    } else if (act==="role"){
+      const toRole = a.role==="admin" ? "staff" : "admin";
+      if (toRole==="staff" && activeAdmins().length<=1){ toast("Keep at least one store manager."); return; }
+      openDlg(`<h3>${toRole==="admin"?"Make store manager":"Make staff"}?</h3><p class="hint">${esc(a.name)} will ${toRole==="admin"?"get full access, including approvals and user accounts.":"only be able to request and return assets."}</p>${dlgBtns("Change role")}`, async()=>{
+        try{ await patch(A.coll, a.id, {role:toRole}); await log({action:"Role changed", tag:a.login, name:a.name, note:ROLE[toRole]}); toast(`${a.name} is now ${ROLE[toRole]}`); }catch(x){ failed(x); }
+      });
+    } else if (act==="toggle"){
+      const turnOff = a.active;
+      if (turnOff && a.role==="admin" && activeAdmins().length<=1){ toast("Keep at least one store manager."); return; }
+      const holding = assets().filter(x=>x.holderId===a.id && OUT.includes(x.status)).length;
+      openDlg(`<h3>${turnOff?"Disable":"Enable"} ${esc(a.name)}?</h3><p class="hint">${turnOff?`They won't be able to log in. Their history stays.${holding?` They still have ${holding} asset${holding>1?"s":""} requested or on loan.`:""}`:"They'll be able to log in again with their current password."}</p>${dlgBtns(turnOff?"Disable account":"Enable account")}`, async()=>{
+        try{ await patch(A.coll, a.id, {active:!turnOff}); await log({action: turnOff?"Account disabled":"Account enabled", tag:a.login, name:a.name, note:""}); toast(`${a.name} ${turnOff?"disabled":"enabled"}`); }catch(x){ failed(x); }
+      });
+    }
+  });
+
+  // ---------- login screens ----------
+  let gateMode = "loading", fails = 0, lockUntil = 0;
+  const gateForm = $("#gateForm");
+  function showGate(mode, msg){
+    gateMode = mode;
+    $("#gate").hidden = false; $("#app").hidden = true; $("#userbox").hidden = true;
+    const note = msg ? `<p class="err">${esc(msg)}</p>` : "";
+    const L = A ? A.loginLabel : "Username", ph = A ? A.loginPlaceholder : "";
+    const loginInput = `<input id="g-user" required autocapitalize="none" spellcheck="false" autocomplete="username" ${A&&A.kind==="firebase"?'type="email"':""} placeholder="${esc(ph)}">`;
+    if (mode==="setup") gateForm.innerHTML = `<h2>Set up the store manager account</h2>
+      <p class="hint">This is the first login for the desk. The store manager can create accounts for everyone else.</p>${note}
+      <label class="f">Your full name<input id="g-name" required autocomplete="name"></label>
+      <label class="f">${esc(L)}${loginInput}</label>
+      <label class="f">Password<input id="g-pw" type="password" required minlength="8" autocomplete="new-password"></label>
+      <label class="f">Confirm password<input id="g-pw2" type="password" required minlength="8" autocomplete="new-password"></label>
+      <button class="btn" type="submit">Create store manager account</button>`;
+    else if (mode==="login") gateForm.innerHTML = `<h2>Log in</h2>${note}
+      <label class="f">${esc(L)}${loginInput}</label>
+      <label class="f">Password<input id="g-pw" type="password" required autocomplete="current-password"></label>
+      <label class="check"><input type="checkbox" id="g-keep"> Keep me logged in on this device</label>
+      <button class="btn" type="submit">Log in</button>
+      <p class="hint">Forgot your password? Ask the store manager to reset it.</p>`;
+    else if (mode==="change") gateForm.innerHTML = `<h2>Choose your own password</h2>
+      <p class="hint">Welcome, ${esc(myAcct?.name||"")}. Replace the temporary password before you continue.</p>${note}
+      <label class="f">New password<input id="g-pw" type="password" required minlength="8" autocomplete="new-password"></label>
+      <label class="f">Confirm new password<input id="g-pw2" type="password" required minlength="8" autocomplete="new-password"></label>
+      <button class="btn" type="submit">Save password and continue</button>`;
+    else if (mode==="wait") gateForm.innerHTML = `<h2>Not available yet</h2><p class="hint">${esc(msg||"The store manager hasn't created the first account yet. Check back once they have.")}</p>`;
+    else gateForm.innerHTML = `<p class="hint">${esc(msg||"Loading…")}</p>`;
+    const f = gateForm.querySelector("input"); if (f) f.focus();
+  }
+  gateForm.addEventListener("submit", async e => {
+    e.preventDefault();
+    const btn = gateForm.querySelector("button[type=submit]"); if (btn) btn.disabled = true;
+    const mode = gateMode;
+    try{
+      if (mode==="setup"){
+        const name=$("#g-name").value.trim(), login=A.norm($("#g-user").value), pw=$("#g-pw").value;
+        const bad = !name ? "Enter your name." : A.check(login) || pwProblem(pw) || (pw!==$("#g-pw2").value ? "The two passwords don't match." : null);
+        if (bad) return showGate("setup", bad);
+        await A.setup({name, login, pw});
+        await log({action:"Account created", tag:login, name, note:"Store manager (first account)"});
+      } else if (mode==="login"){
+        if (Date.now() < lockUntil) return showGate("login", `Too many attempts. Try again in ${Math.ceil((lockUntil-Date.now())/1000)} seconds.`);
+        const login=A.norm($("#g-user").value), pw=$("#g-pw").value, keep=$("#g-keep").checked;
+        try{ await A.login(login, pw, keep); fails = 0; }
+        catch(x){ fails++; if (fails>=5){ lockUntil=Date.now()+30000; fails=0; } return showGate("login", x.message); }
+      } else if (mode==="change"){
+        const pw=$("#g-pw").value, bad = pwProblem(pw) || (pw!==$("#g-pw2").value ? "The two passwords don't match." : null);
+        if (bad) return showGate("change", bad);
+        await A.firstPassword(pw);
+        myAcct = {...myAcct, mustChange:false}; showApp(); toast("Password saved");
+      }
+    }catch(x){ showGate(mode, x.message || "Something went wrong. Try again."); }
+    finally{ if (btn && btn.isConnected) btn.disabled = false; }
+  });
+
+  // ---------- session ----------
+  let subs = [], histUnsub = null;
+  const onErr = e => { if (e && e.code==="revoked"){ $("#banner").hidden=false; $("#banner").textContent="Your access to this desk has changed. Reload to continue."; } };
+  function watchAllHistory(){
+    if (!isMgr || histUnsub) return;
+    histUnsub = B.watch("history", {orderBy:["at","desc"], limit:150}, r=>{ S.history = r; if (me && isMgr) renderReport(); resolveNames(); }, onErr);
+  }
+  function stopAll(){
+    subs.forEach(u=>{ try{ u(); }catch(e){} }); subs = [];
+    if (histUnsub){ try{ histUnsub(); }catch(e){} histUnsub = null; }
+  }
+  function onAuthState(st){
+    if (st.status==="in") return enterApp(st.acct);
+    if (me) leaveApp();
+    showGate(st.status==="setup" ? "setup" : st.status==="wait" ? "wait" : "login", st.msg);
+  }
+  function enterApp(acct){
+    stopAll();
+    me = acct.id; myAcct = acct; isMgr = acct.role==="admin";
+    try{ seenAt = localStorage.getItem("wms-seen-"+me) || ""; }catch(e){ seenAt = ""; }
+    patch(A.coll, me, {lastLoginAt:new Date().toISOString()}).catch(()=>{});
+    S.myLog = null;
+    subs.push(B.watch(A.coll, {}, r=>{ S.accounts = new Map(r.map(x=>{ const v = A.view(x); return [v.id, v]; })); onAccounts(); if (me) renderAll(); }, onErr));
+    subs.push(B.watch("assets", {}, r=>{ S.assets = new Map(r.map(d=>[d.id, d])); renderAll(); }, onErr));
+    subs.push(B.watch("locations", {}, r=>{ S.locations = new Map(r.map(d=>[d.id, d])); renderAll(); }, onErr));
+    subs.push(B.watch("history", {where:["requesterId","==",me], limit:300}, r=>{ S.myLog = r.sort((x,y)=>(y.at||"").localeCompare(x.at||"")); if (me) renderMyLog(); resolveNames(); }, onErr));
+    watchAllHistory();
+    if (acct.mustChange) return showGate("change");
+    showApp();
+  }
+  function leaveApp(){
+    stopAll();
+    me = null; myAcct = null; isMgr = false; S.myLog = null; S.history = []; S.accounts = new Map();
+    $("#who").textContent = "Logged out";
+  }
+  function showApp(){
+    $("#gate").hidden = true; $("#app").hidden = false; $("#userbox").hidden = false;
+    $("#who").textContent = `${myAcct.name} · ${ROLE[myAcct.role]||myAcct.role}`;
+    applyRole(); renderAll();
+  }
+  function onAccounts(){
+    if (!me) return;
+    const a = S.accounts.get(me);
+    if (!a || !a.active){ A.logout("Your account has been disabled. Ask the store manager."); return; }
+    const roleChanged = a.role !== myAcct.role;
+    myAcct = {...myAcct, ...a}; isMgr = a.role==="admin";
+    if (roleChanged){ watchAllHistory(); if (!$("#app").hidden){ showApp(); toast(`Your role is now ${ROLE[a.role]}`); } }
+  }
+  $("#btnLogout").onclick = async () => { await A.logout(); toast("Logged out"); };
+  $("#btnPw").onclick = () => {
+    openDlg(`<h3>Change your password</h3>
+      <label class="f">Current password<input id="d-cur" type="password" required autocomplete="current-password"></label>
+      <label class="f">New password<input id="d-new" type="password" required minlength="8" autocomplete="new-password"></label>
+      <label class="f">Confirm new password<input id="d-new2" type="password" required minlength="8" autocomplete="new-password"></label>
+      ${dlgBtns("Change password")}`, async()=>{
+      const cur=$("#d-cur").value, np=$("#d-new").value;
+      const bad = pwProblem(np) || (np!==$("#d-new2").value ? "The two new passwords don't match." : null);
+      if (bad){ toast(bad); return false; }
+      try{ await A.changePassword(cur, np); toast("Password changed"); }
+      catch(x){ toast(x.message || "Couldn't change the password."); return false; }
+    });
+  };
+
+  // ---------- boot ----------
+  function applyRole(){
+    $("#viewSwitch").hidden = !isMgr;
+    let v="manager", p="assets"; try{ v=localStorage.getItem("wms-view-"+me)||v; p=localStorage.getItem("wms-panel-"+me)||p; }catch(e){}
+    if (p==="accounts" && !isMgr) p="assets";
+    setPanel(p); setView(isMgr ? v : "user");
+  }
+  function applyLabels(){
+    $("#u-user-label").textContent = A.loginLabel;
+    $("#u-user").placeholder = A.loginPlaceholder;
+    $("#u-user").type = A.kind==="firebase" ? "email" : "text";
+    $("#accHint").textContent = A.kind==="firebase"
+      ? "They log in with their email and the temporary password, then choose their own. If they forget it later, Reset password emails them a link."
+      : "Give the person their username and temporary password. They'll be asked to set their own password the first time they log in.";
+  }
+  async function boot(){
+    showGate("loading");
+    const C = window.claude, cfg = window.FIREBASE_CONFIG;
+    try{
+      if (cfg && cfg.apiKey && !/PASTE/i.test(cfg.apiKey)){
+        const fb = await loadFirebase(cfg);
+        B = FirebaseBackend(fb); A = FirebaseAuth(fb, B);
+      } else if (C && C.use){
+        const [dbNs, uNs, dNs] = await Promise.all([C.use("db"), C.use("user"), C.use("downloads")]);
+        userNs = uNs; dl = dNs;
+        if (!dbNs){ showGate("wait", "The desk can't reach its database here. Make sure you're signed in to Claude and the desk has been shared with you."); return; }
+        B = ArtifactBackend(dbNs); A = ClaudeAuth(B, userNs);
+      } else if (cfg !== undefined){
+        showGate("wait", "This copy of the desk isn't connected to a database yet. Fill in firebase-config.js as described in the setup guide (step 5)."); return;
+      } else {
+        B = LocalBackend(); A = ClaudeAuth(B, null);
+        $("#banner").hidden=false; $("#banner").textContent="Preview mode: changes stay on this screen only.";
+      }
+    }catch(e){
+      console.error(e);
+      showGate("wait", "Couldn't connect to the database. Check your internet connection and the details in firebase-config.js, then reload."); return;
+    }
+    applyLabels();
+    A.start(onAuthState);
+  }
+  boot();
+})();
+</script>
+
+</body>
+</html>
