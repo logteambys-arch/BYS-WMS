@@ -131,6 +131,7 @@ dialog h3{margin:0;font-size:17px}
 .userbox{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
 .role-admin{background:var(--accent-soft);color:var(--accent)}
 .role-staff{background:var(--idle-soft);color:var(--idle)}
+.role-assistant{background:var(--pend-soft);color:var(--pend)}
 .cred{font:600 15px var(--font-code);background:var(--sunk);border:1px dashed var(--line);border-radius:4px;padding:12px 14px;display:grid;grid-template-columns:auto 1fr;gap:4px 14px;user-select:all}
 .cred span{color:var(--muted);font:500 12px var(--font-ui);text-transform:uppercase;letter-spacing:.05em;align-self:center}
 .pwrow{display:flex;gap:8px}
@@ -182,7 +183,7 @@ dialog h3{margin:0;font-size:17px}
         <div class="grid">
           <label class="f">Full name<input id="u-name" required placeholder="e.g. Tan Kang Zheng"></label>
           <label class="f"><span id="u-user-label">Username</span><input id="u-user" required placeholder="e.g. kangzheng" autocapitalize="none" spellcheck="false"></label>
-          <label class="f">Role<select id="u-role"><option value="staff">Staff – request and return assets</option><option value="admin">Store manager – full access</option></select></label>
+          <label class="f">Role<select id="u-role"><option value="staff">Staff – request and return assets</option><option value="assistant">Assistant Store Manager – full access</option><option value="manager">Store manager – full access</option></select></label>
           <label class="f">Temporary password<div class="pwrow"><input id="u-pw" required minlength="8" autocomplete="new-password"><button class="btn quiet" type="button" id="u-gen">Generate</button></div></label>
         </div>
         <p class="err" id="accErr" hidden></p>
@@ -350,8 +351,17 @@ dialog h3{margin:0;font-size:17px}
   const esc = v => String(v ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
   const STATUS = {available:"Available", requested:"Requested", approved:"Approved", on_hold:"On hold", return_pending:"Return pending", inspect:"Needs check", retired:"Retired"};
   const OUT = ["requested","approved","on_hold","return_pending"];
-  const today = () => new Date().toISOString().slice(0,10);
-  const addDays = n => { const d = new Date(); d.setDate(d.getDate()+n); return d.toISOString().slice(0,10); };
+  const ymd = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+  const today = () => ymd(new Date());
+  const addDays = (n, from) => { const d = from ? new Date(from) : new Date(); d.setDate(d.getDate()+n); return ymd(d); };
+  const MAX_LOAN_DAYS = 30;
+  const latestDue = from => addDays(MAX_LOAN_DAYS, from);
+  function dueProblem(due, from){
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(due||"")) return "Choose a return date.";
+    if (due < today()) return "The return date can't be in the past.";
+    if (due > latestDue(from)) return `Loans can be at most ${MAX_LOAN_DAYS} days. Pick a date on or before ${fmtDate(latestDue(from))}.`;
+    return null;
+  }
   const fmtDate = iso => iso ? new Date(iso).toLocaleDateString(undefined,{day:"2-digit",month:"short",year:"numeric"}) : "–";
   const fmtDT = iso => iso ? new Date(iso).toLocaleString(undefined,{day:"2-digit",month:"short",hour:"2-digit",minute:"2-digit"}) : "–";
   const rid = p => p + "_" + Date.now().toString(36) + Math.random().toString(36).slice(2,7);
@@ -447,7 +457,13 @@ dialog h3{margin:0;font-size:17px}
                       password); roles live in the "users" collection and
                       the Firestore rules enforce them on the server.
      ===================================================================== */
-  const ROLE = {admin:"Store manager", staff:"Staff"};
+  /* Roles. Assistant Store Managers have the same access as the Store Manager
+     (stored as role "admin" with title "assistant", so the Firebase rules need no change). */
+  const ROLE_LABEL = {manager:"Store manager", assistant:"Assistant Store Manager", staff:"Staff"};
+  const ROLE_FIELDS = {manager:{role:"admin", title:null}, assistant:{role:"admin", title:"assistant"}, staff:{role:"staff", title:null}};
+  const pickOf = a => a.role==="admin" ? (a.title==="assistant" ? "assistant" : "manager") : "staff";
+  const roleLabel = a => ROLE_LABEL[pickOf(a)];
+  const storeManagers = () => [...S.accounts.values()].filter(a=>a.active && pickOf(a)==="manager");
   const pwProblem = p => p.length < 8 ? "Use at least 8 characters." : null;
   function genPw(){ const a="abcdefghjkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789"; const r=crypto.getRandomValues(new Uint32Array(10)); return [...r].map(n=>a[n%a.length]).join(""); }
   const activeAdmins = () => [...S.accounts.values()].filter(a=>a.role==="admin" && a.active);
@@ -466,7 +482,7 @@ dialog h3{margin:0;font-size:17px}
 
   function ClaudeAuth(B, userNs){
     let acc = new Map(), cb = () => {};
-    const view = a => ({id:a.id||a.username, login:a.username, name:a.name, role:a.role, active:a.active!==false, mustChange:!!a.mustChange, lastLoginAt:a.lastLoginAt||null});
+    const view = a => ({id:a.id||a.username, login:a.username, name:a.name, role:a.role, title:a.title||null, active:a.active!==false, mustChange:!!a.mustChange, lastLoginAt:a.lastLoginAt||null});
     return {
       kind:"claude", coll:"accounts", loginLabel:"Username", loginPlaceholder:"e.g. kangzheng",
       norm: s => String(s||"").trim().toLowerCase(),
@@ -503,9 +519,9 @@ dialog h3{margin:0;font-size:17px}
         if (!(await checkPw(acc.get(me), cur))) throw new Error("Your current password is wrong.");
         await B.update("accounts", me, {pw:await makePw(np), mustChange:false});
       },
-      async create({name, login, role, pw}){
+      async create({name, login, role, title, pw}){
         if (acc.has(login) || S.accounts.has(login)) throw new Error(`The username ${login} is already taken.`);
-        const a = {username:login, name, role, active:true, mustChange:true, pw:await makePw(pw), createdAt:new Date().toISOString(), createdBy:me, lastLoginAt:null};
+        const a = {username:login, name, role, title:title||null, active:true, mustChange:true, pw:await makePw(pw), createdAt:new Date().toISOString(), createdBy:me, lastLoginAt:null};
         await B.set("accounts", login, a); return view({id:login, ...a});
       },
       async reset(a){ const pw = genPw(); await B.update("accounts", a.id, {pw:await makePw(pw), mustChange:true}); return {tempPw:pw}; }
@@ -515,7 +531,7 @@ dialog h3{margin:0;font-size:17px}
   function FirebaseAuth(fb, B){
     const {auth, a, config} = fb;
     let cb = () => {}, quiet = false, pendingMsg = "";
-    const view = (id, d, email) => ({id, login:d.email||email||"", name:d.name||"", role:d.role, active:d.active===true, mustChange:!!d.mustChange, lastLoginAt:d.lastLoginAt||null});
+    const view = (id, d, email) => ({id, login:d.email||email||"", name:d.name||"", role:d.role, title:d.title||null, active:d.active===true, mustChange:!!d.mustChange, lastLoginAt:d.lastLoginAt||null});
     const words = e => ({
       "auth/invalid-credential":"That email and password don't match.", "auth/wrong-password":"That email and password don't match.",
       "auth/user-not-found":"That email and password don't match.", "auth/invalid-login-credentials":"That email and password don't match.",
@@ -572,14 +588,14 @@ dialog h3{margin:0;font-size:17px}
         catch(e){ throw new Error(e.code==="auth/too-many-requests" ? words(e) : "Your current password is wrong."); }
         try{ await a.updatePassword(auth.currentUser, np); }catch(e){ fail(e); }
       },
-      async create({name, login, role, pw}){
+      async create({name, login, role, title, pw}){
         // A second, temporary Firebase app creates the login so the store manager stays logged in.
         const app2 = fb.app.initializeApp(config, "add-" + Date.now()), auth2 = a.getAuth(app2);
         let uid;
         try{ const cred = await a.createUserWithEmailAndPassword(auth2, login, pw); uid = cred.user.uid; await a.signOut(auth2); }
         catch(e){ fail(e); }
         finally{ fb.app.deleteApp(app2).catch(()=>{}); }
-        const d = {name, email:login, role, active:true, mustChange:true, createdAt:new Date().toISOString(), createdBy:me, lastLoginAt:null};
+        const d = {name, email:login, role, title:title||null, active:true, mustChange:true, createdAt:new Date().toISOString(), createdBy:me, lastLoginAt:null};
         try{ await B.set("users", uid, d); }catch(e){ fail(e); }
         return view(uid, d);
       },
@@ -694,7 +710,7 @@ dialog h3{margin:0;font-size:17px}
   const dlg=$("#dlg"), dform=$("#dlgForm"); let onDlg=null;
   function openDlg(html, handler){ dform.innerHTML=html; onDlg=handler; dlg.showModal(); const f=dform.querySelector("input,select,textarea"); if(f) f.focus(); }
   dform.addEventListener("submit", async e => { e.preventDefault(); if (e.submitter && e.submitter.value==="cancel"){ dlg.close(); return; } const btn=dform.querySelector("button[value=ok]"); if(btn) btn.disabled=true; try{ const close = await onDlg(); if (close!==false) dlg.close(); } finally { if(btn) btn.disabled=false; } });
-  const dlgBtns = ok => `<div class="row end"><button class="btn quiet" value="cancel">Cancel</button><button class="btn" value="ok">${esc(ok)}</button></div>`;
+  const dlgBtns = ok => `<div class="row end"><button class="btn quiet" value="cancel" formnovalidate>Cancel</button><button class="btn" value="ok">${esc(ok)}</button></div>`;
 
   // ---------- request / return / manage ----------
   async function lockAndCheck(id, expect){
@@ -709,12 +725,12 @@ dialog h3{margin:0;font-size:17px}
     if (!me){ toast("Sign in to request assets."); return; }
     openDlg(`<h3>Request ${esc(a.name)}</h3>
       <p class="hint"><span class="tag">${esc(a.tag)}</span> · stored at <span class="bin">${esc(locCode(a.locationId))}</span></p>
-      <label class="f">Return by<input type="date" id="d-due" required min="${today()}" value="${addDays(7)}"></label>
+      <label class="f">Return by (up to ${MAX_LOAN_DAYS} days)<input type="date" id="d-due" required min="${today()}" max="${latestDue()}" value="${addDays(7)}"></label>
       <label class="f">Purpose<textarea id="d-purpose" placeholder="e.g. Firmware test for SWQA, unit to desk 4F"></textarea></label>
       <p class="hint">A manager reviews your request. Once approved, collect the item and tap Accept to start the loan.</p>
       ${dlgBtns("Send request")}`, async () => {
       const due=$("#d-due").value, purpose=$("#d-purpose").value.trim();
-      if (!due){ toast("Choose a return date."); return false; }
+      const dueBad = dueProblem(due); if (dueBad){ toast(dueBad); return false; }
       try{
         const cur = await lockAndCheck(id, x=>x.status==="available"); if(!cur) return;
         await patch("assets", id, {status:"requested", holderId:me, requestedAt:new Date().toISOString(), holdSince:null, dueBack:due, purpose, approvedBy:null, approvedAt:null, managerNote:""});
@@ -762,10 +778,11 @@ dialog h3{margin:0;font-size:17px}
     const a=S.assets.get(id); if(!a) return;
     openDlg(`<h3>Approve loan</h3>
       <p class="hint"><span class="tag">${esc(a.tag)}</span> · ${esc(a.name)} for <b>${esc(holderName(a.holderId))}</b>${a.purpose?`<br>Purpose: ${esc(a.purpose)}`:""}</p>
-      <label class="f">Return by<input type="date" id="d-due" required min="${today()}" value="${esc(a.dueBack||addDays(7))}"></label>
+      <label class="f">Return by (latest ${fmtDate(latestDue(a.requestedAt))})<input type="date" id="d-due" required min="${today()}" max="${latestDue(a.requestedAt)}" value="${esc(a.dueBack||addDays(7))}"></label>
       <label class="f">Note to requester<input id="d-note" placeholder="e.g. Collect from counter after 2pm"></label>
       ${dlgBtns("Approve")}`, async () => {
       const due=$("#d-due").value, note=$("#d-note").value.trim();
+      const dueBad = dueProblem(due, a.requestedAt); if (dueBad){ toast(dueBad); return false; }
       try{
         const cur = await lockAndCheck(id, x=>x.status==="requested"); if(!cur) return;
         await patch("assets", id, {status:"approved", dueBack:due, approvedBy:me, approvedAt:new Date().toISOString(), managerNote:note});
@@ -1127,29 +1144,29 @@ dialog h3{margin:0;font-size:17px}
   $("#accForm").addEventListener("submit", async e => {
     e.preventDefault();
     const err = $("#accErr"); err.hidden = true;
-    const name = $("#u-name").value.trim(), login = A.norm($("#u-user").value), role = $("#u-role").value, pw = $("#u-pw").value;
+    const name = $("#u-name").value.trim(), login = A.norm($("#u-user").value), pick = $("#u-role").value, pw = $("#u-pw").value;
     const bad = !name ? "Enter the person's full name." : A.check(login) || pwProblem(pw);
     if (bad){ err.textContent = bad; err.hidden = false; return; }
     const btn = $("#accForm button[type=submit]"); btn.disabled = true;
     try{
-      const acct = await A.create({name, login, role, pw});
-      await log({action:"Account created", tag:login, name, note:ROLE[role]});
+      const acct = await A.create({name, login, ...ROLE_FIELDS[pick], pw});
+      await log({action:"Account created", tag:login, name, note:ROLE_LABEL[pick]});
       ["#u-name","#u-user","#u-pw"].forEach(s=>$(s).value=""); $("#u-pw").type = "password"; $("#u-role").value = "staff";
-      showCreds("Account created", acct, pw, `${ROLE[role]} account is ready. Send these details to ${name}.`);
+      showCreds("Account created", acct, pw, `${ROLE_LABEL[pick]} account is ready. Send these details to ${name}.`);
     }catch(x){ err.textContent = x.message || "Couldn't create the account."; err.hidden = false; }
     finally{ btn.disabled = false; }
   });
   function renderAccounts(){
-    const list = [...S.accounts.values()].sort((a,b)=>(!a.active)-(!b.active) || (a.role!=="admin")-(b.role!=="admin") || (a.name||"").localeCompare(b.name||""));
+    const list = [...S.accounts.values()].sort((a,b)=>(!a.active)-(!b.active) || ["manager","assistant","staff"].indexOf(pickOf(a))-["manager","assistant","staff"].indexOf(pickOf(b)) || (a.name||"").localeCompare(b.name||""));
     $("#accTable").innerHTML = table(["Name",A.loginLabel,"Role","Status","Last login",""], list.map(a=>{
       const self = a.id===me, off = !a.active;
       return `<tr><td><b>${esc(a.name)}</b>${self?' <span class="sub2">(you)</span>':""}</td><td class="tag">${esc(a.login)}</td>
-      <td><span class="pill role-${a.role}">${ROLE[a.role]||a.role}</span></td>
+      <td><span class="pill role-${pickOf(a)==="assistant"?"assistant":a.role}">${roleLabel(a)}</span></td>
       <td>${off?'<span class="pill s-retired">Disabled</span>':a.mustChange?'<span class="pill s-requested">Not logged in yet</span>':'<span class="pill s-available">Active</span>'}</td>
       <td>${fmtDT(a.lastLoginAt)}</td>
       <td><div class="row" style="flex-wrap:nowrap;gap:6px">
         <button class="btn quiet sm" data-acc="reset" data-id="${esc(a.id)}">Reset password</button>
-        ${self?"":`<button class="btn quiet sm" data-acc="role" data-id="${esc(a.id)}">${a.role==="admin"?"Make staff":"Make store manager"}</button>
+        ${self?"":`<button class="btn quiet sm" data-acc="role" data-id="${esc(a.id)}">Change role</button>
         <button class="btn ${off?"quiet":"danger"} sm" data-acc="toggle" data-id="${esc(a.id)}">${off?"Enable":"Disable"}</button>`}
       </div></td></tr>`;
     }), "No accounts yet.");
@@ -1171,14 +1188,19 @@ dialog h3{margin:0;font-size:17px}
         }catch(x){ toast(x.message || "Couldn't reset the password."); }
       });
     } else if (act==="role"){
-      const toRole = a.role==="admin" ? "staff" : "admin";
-      if (toRole==="staff" && activeAdmins().length<=1){ toast("Keep at least one store manager."); return; }
-      openDlg(`<h3>${toRole==="admin"?"Make store manager":"Make staff"}?</h3><p class="hint">${esc(a.name)} will ${toRole==="admin"?"get full access, including approvals and user accounts.":"only be able to request and return assets."}</p>${dlgBtns("Change role")}`, async()=>{
-        try{ await patch(A.coll, a.id, {role:toRole}); await log({action:"Role changed", tag:a.login, name:a.name, note:ROLE[toRole]}); toast(`${a.name} is now ${ROLE[toRole]}`); }catch(x){ failed(x); }
+      const cur = pickOf(a);
+      openDlg(`<h3>Change role for ${esc(a.name)}</h3>
+        <p class="hint">Currently: <b>${ROLE_LABEL[cur]}</b>. Store managers and assistant store managers have full access, including approvals, stock and user accounts. Staff can only request and return assets.</p>
+        <label class="f">New role<select id="d-role">${["staff","assistant","manager"].map(k=>`<option value="${k}" ${k===cur?"selected":""}>${ROLE_LABEL[k]}</option>`).join("")}</select></label>
+        ${dlgBtns("Change role")}`, async()=>{
+        const pick = $("#d-role").value;
+        if (pick===cur) return;
+        if (cur==="manager" && storeManagers().length<=1){ toast("Keep at least one Store manager. Make someone else Store manager first."); return false; }
+        try{ await patch(A.coll, a.id, ROLE_FIELDS[pick]); await log({action:"Role changed", tag:a.login, name:a.name, note:ROLE_LABEL[pick]}); toast(`${a.name} is now ${ROLE_LABEL[pick]}`); }catch(x){ failed(x); }
       });
     } else if (act==="toggle"){
       const turnOff = a.active;
-      if (turnOff && a.role==="admin" && activeAdmins().length<=1){ toast("Keep at least one store manager."); return; }
+      if (turnOff && pickOf(a)==="manager" && storeManagers().length<=1){ toast("Keep at least one Store manager."); return; }
       const holding = assets().filter(x=>x.holderId===a.id && OUT.includes(x.status)).length;
       openDlg(`<h3>${turnOff?"Disable":"Enable"} ${esc(a.name)}?</h3><p class="hint">${turnOff?`They won't be able to log in. Their history stays.${holding?` They still have ${holding} asset${holding>1?"s":""} requested or on loan.`:""}`:"They'll be able to log in again with their current password."}</p>${dlgBtns(turnOff?"Disable account":"Enable account")}`, async()=>{
         try{ await patch(A.coll, a.id, {active:!turnOff}); await log({action: turnOff?"Account disabled":"Account enabled", tag:a.login, name:a.name, note:""}); toast(`${a.name} ${turnOff?"disabled":"enabled"}`); }catch(x){ failed(x); }
@@ -1280,16 +1302,16 @@ dialog h3{margin:0;font-size:17px}
   }
   function showApp(){
     $("#gate").hidden = true; $("#app").hidden = false; $("#userbox").hidden = false;
-    $("#who").textContent = `${myAcct.name} · ${ROLE[myAcct.role]||myAcct.role}`;
+    $("#who").textContent = `${myAcct.name} · ${roleLabel(myAcct)}`;
     applyRole(); renderAll();
   }
   function onAccounts(){
     if (!me) return;
     const a = S.accounts.get(me);
     if (!a || !a.active){ A.logout("Your account has been disabled. Ask the store manager."); return; }
-    const roleChanged = a.role !== myAcct.role;
+    const roleChanged = pickOf(a) !== pickOf(myAcct);
     myAcct = {...myAcct, ...a}; isMgr = a.role==="admin";
-    if (roleChanged){ watchAllHistory(); if (!$("#app").hidden){ showApp(); toast(`Your role is now ${ROLE[a.role]}`); } }
+    if (roleChanged){ watchAllHistory(); if (!$("#app").hidden){ showApp(); toast(`Your role is now ${roleLabel(a)}`); } }
   }
   $("#btnLogout").onclick = async () => { await A.logout(); toast("Logged out"); };
   $("#btnPw").onclick = () => {
