@@ -81,21 +81,25 @@ td.num,th.num{text-align:right}
 .s-on_hold{background:var(--accent-soft);color:var(--accent)}
 .s-inspect{background:var(--warn-soft);color:var(--warn)}
 .s-retired{background:var(--idle-soft);color:var(--idle)}
+.s-missing{background:var(--bad-soft);color:var(--bad)}
+.au-check{width:auto;margin:0}
 .s-requested{background:var(--warn-soft);color:var(--warn)}
 .s-approved{background:var(--pend-soft);color:var(--pend)}
 .s-return_pending{background:var(--warn-soft);color:var(--warn)}
+.s-cancelled{background:var(--warn-soft);color:var(--warn)}
 nav.sub .n.hot{background:var(--warn);color:var(--surface)}
 .card h2 .n{font:600 11px var(--font-code);border-radius:10px;padding:2px 8px;margin-left:8px;vertical-align:middle}
 .n.hot{background:var(--warn);color:var(--surface)}
 .seg .n{font:600 10px var(--font-code);background:var(--warn);color:var(--surface);border-radius:9px;padding:1px 6px;margin-left:6px}
-.log{display:flex;flex-direction:column}
-.log-i{display:grid;grid-template-columns:118px 1fr;gap:4px 14px;padding:12px 4px;border-bottom:1px solid var(--line)}
+.log{display:flex;flex-direction:column;max-height:260px;overflow-y:auto;border:1px solid var(--line);border-radius:var(--r);padding-inline:10px;overscroll-behavior:contain}
+.card-compact{gap:10px}
+.log-i{display:grid;grid-template-columns:104px 1fr;gap:2px 12px;padding:8px 2px;border-bottom:1px solid var(--line);font-size:13px}
 .log-i:last-child{border-bottom:0}
 .log-i.new{background:var(--warn-soft);border-radius:4px;padding-inline:10px}
 .log-t{color:var(--muted);font-size:12px;font-variant-numeric:tabular-nums}
 .log-b{display:flex;flex-direction:column;gap:4px;min-width:0}
 .log-h{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
-.reason{border-left:3px solid var(--bad);padding:4px 10px;background:var(--bad-soft);border-radius:0 4px 4px 0;font-size:13px}
+.reason{border-left:3px solid var(--bad);padding:2px 8px;background:var(--bad-soft);border-radius:0 4px 4px 0;font-size:12px}
 .reason.ok{border-left-color:var(--ok);background:var(--ok-soft)}
 .reason.plain{border-left-color:var(--line);background:var(--sunk)}
 @media (max-width:480px){.log-i{grid-template-columns:1fr}}
@@ -128,6 +132,8 @@ dialog h3{margin:0;font-size:17px}
 .gate .btn{width:100%;padding:10px 14px;font-size:14px}
 .check{display:flex;gap:8px;align-items:center;font-size:13px;color:var(--muted)}
 .check input{width:auto}
+.linkbtn{background:none;border:0;padding:0;color:var(--accent);font:600 13px var(--font-ui);cursor:pointer;text-decoration:underline;text-underline-offset:2px}
+.ok-msg{color:var(--ok);font-size:13px;margin:0}
 .userbox{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
 .role-admin{background:var(--accent-soft);color:var(--accent)}
 .role-staff{background:var(--idle-soft);color:var(--idle)}
@@ -171,6 +177,7 @@ dialog h3{margin:0;font-size:17px}
       <button type="button" role="tab" data-mp="assets" aria-selected="true">Assets<span class="n" id="n-assets">0</span></button>
       <button type="button" role="tab" data-mp="locations" aria-selected="false">Locations<span class="n" id="n-locations">0</span></button>
       <button type="button" role="tab" data-mp="holds" aria-selected="false">On hold<span class="n" id="n-holds">0</span></button>
+      <button type="button" role="tab" data-mp="audit" aria-selected="false">Audit<span class="n" id="n-audit">0</span></button>
       <button type="button" role="tab" data-mp="report" aria-selected="false">Inventory report</button>
       <button type="button" role="tab" data-mp="accounts" aria-selected="false">Accounts<span class="n" id="n-accounts">0</span></button>
     </nav>
@@ -208,6 +215,11 @@ dialog h3{margin:0;font-size:17px}
         <div id="retList"></div>
       </div>
       <div class="card">
+        <h2>Cancelled after approval – put back in stock</h2>
+        <p class="hint">The person withdrew after you approved, so the item may already be set aside. Put it back on its shelf, then confirm here to make it available again.</p>
+        <div id="cxlList"></div>
+      </div>
+      <div class="card">
         <h2>Approved, waiting for staff to accept</h2>
         <p class="hint">The loan starts when the person confirms they've received the item.</p>
         <div id="apprList"></div>
@@ -226,7 +238,9 @@ dialog h3{margin:0;font-size:17px}
           <label class="f">Store at location<select id="a-loc" required></select></label>
           <label class="f">Tag prefix<input id="a-prefix" value="RZ" maxlength="10"></label>
           <label class="f">Units to create<input id="a-qty" type="number" min="1" max="50" value="1"></label>
+          <label class="f">Audit every<select id="a-audit"><option value="1">1 month</option><option value="3" selected>3 months</option><option value="6">6 months</option><option value="12">12 months</option></select></label>
         </div>
+        <label class="f">Accessories<input id="a-acc" placeholder="e.g. USB-C cable, wrist rest, carry pouch"></label>
         <label class="f">Notes / specs<textarea id="a-notes" placeholder="e.g. Win 11 · i9-13950HX RTX4090 32GB RAM 1TB SSD · US SKU"></textarea></label>
         <datalist id="catList"></datalist>
         <p class="err" id="assetErr" hidden></p>
@@ -248,7 +262,7 @@ dialog h3{margin:0;font-size:17px}
         <div class="tools">
           <input type="search" id="a-search" placeholder="Search tag, name, serial, category">
           <select id="a-fstatus" aria-label="Filter by status">
-            <option value="">All statuses</option><option value="available">Available</option><option value="requested">Requested</option><option value="approved">Approved</option><option value="on_hold">On hold</option><option value="return_pending">Return pending</option><option value="inspect">Needs check</option><option value="retired">Retired</option>
+            <option value="">All statuses</option><option value="available">Available</option><option value="requested">Requested</option><option value="approved">Approved</option><option value="on_hold">On hold</option><option value="return_pending">Return pending</option><option value="inspect">Needs check</option><option value="missing">Missing</option><option value="retired">Retired</option>
           </select>
           <select id="a-floc" aria-label="Filter by location"></select>
         </div>
@@ -288,6 +302,22 @@ dialog h3{margin:0;font-size:17px}
       </div>
     </div>
 
+    <!-- Audit -->
+    <div class="panel" id="mp-audit" hidden>
+      <div class="tiles" id="au-tiles"></div>
+      <div class="card">
+        <h2>Audit schedule <small>each asset is checked every 3 months unless set otherwise</small></h2>
+        <div class="tools">
+          <input type="search" id="au-search" placeholder="Search tag, product or location">
+          <select id="au-show" aria-label="Which assets"><option value="due">Overdue and due in the next 14 days</option><option value="overdue">Overdue only</option><option value="all">All assets</option></select>
+          <select id="au-loc" aria-label="Location"></select>
+        </div>
+        <div class="row" id="au-bulk" hidden><span class="hint" id="au-selcount" style="margin:0"></span><button class="btn sm" type="button" id="au-bulkbtn">Mark selected as audited (found OK)</button><button class="btn quiet sm" type="button" id="au-clear">Clear selection</button></div>
+        <div id="au-table"></div>
+      </div>
+      <div class="card"><h2>Recent audits</h2><div id="au-hist"></div></div>
+    </div>
+
     <!-- Report -->
     <div class="panel" id="mp-report" hidden>
       <div class="row" style="justify-content:space-between">
@@ -315,14 +345,7 @@ dialog h3{margin:0;font-size:17px}
       <h2>My requests</h2>
       <p class="steps"><b>1 · You request</b> → <b>2 · Manager approves</b> → <b>3 · You accept the item</b> → loan starts</p>
       <div id="myReqs"></div>
-    </div>
-    <div class="card">
-      <div class="row" style="justify-content:space-between">
-        <h2>My activity <span class="n hot" id="unreadChip" hidden></span></h2>
-        <button class="btn quiet sm" type="button" id="markRead" hidden>Mark all as read</button>
-      </div>
-      <p class="hint">Every step on your requests and returns, including the manager's reasons.</p>
-      <div id="myLog"></div>
+      <p class="hint" id="newNote" hidden style="margin:0"></p>
     </div>
     <div class="card">
       <h2>Assets I'm holding</h2>
@@ -337,6 +360,13 @@ dialog h3{margin:0;font-size:17px}
       </div>
       <div id="userTable"></div>
     </div>
+    <div class="card card-compact">
+      <div class="row" style="justify-content:space-between">
+        <h2>My activity <span class="n hot" id="unreadChip" hidden></span></h2>
+        <button class="btn quiet sm" type="button" id="markRead" hidden>Mark all as read</button>
+      </div>
+      <div id="myLog"></div>
+    </div>
   </section>
   </div>
 </div>
@@ -349,8 +379,8 @@ dialog h3{margin:0;font-size:17px}
 (() => {
   const $ = s => document.querySelector(s);
   const esc = v => String(v ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
-  const STATUS = {available:"Available", requested:"Requested", approved:"Approved", on_hold:"On hold", return_pending:"Return pending", inspect:"Needs check", retired:"Retired"};
-  const OUT = ["requested","approved","on_hold","return_pending"];
+  const STATUS = {available:"Available", requested:"Requested", approved:"Approved", on_hold:"On hold", return_pending:"Return pending", cancelled:"Cancelled – to restock", inspect:"Needs check", missing:"Missing", retired:"Retired"};
+  const OUT = ["requested","approved","on_hold","return_pending","cancelled"];
   const ymd = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
   const today = () => ymd(new Date());
   const addDays = (n, from) => { const d = from ? new Date(from) : new Date(); d.setDate(d.getDate()+n); return ymd(d); };
@@ -482,7 +512,7 @@ dialog h3{margin:0;font-size:17px}
 
   function ClaudeAuth(B, userNs){
     let acc = new Map(), cb = () => {};
-    const view = a => ({id:a.id||a.username, login:a.username, name:a.name, role:a.role, title:a.title||null, active:a.active!==false, mustChange:!!a.mustChange, lastLoginAt:a.lastLoginAt||null});
+    const view = a => ({id:a.id||a.username, login:a.username, name:a.name, role:a.role, title:a.title||null, active:a.active!==false && !a.deleted, deleted:!!a.deleted, mustChange:!!a.mustChange, lastLoginAt:a.lastLoginAt||null});
     return {
       kind:"claude", coll:"accounts", loginLabel:"Username", loginPlaceholder:"e.g. kangzheng",
       norm: s => String(s||"").trim().toLowerCase(),
@@ -520,7 +550,8 @@ dialog h3{margin:0;font-size:17px}
         await B.update("accounts", me, {pw:await makePw(np), mustChange:false});
       },
       async create({name, login, role, title, pw}){
-        if (acc.has(login) || S.accounts.has(login)) throw new Error(`The username ${login} is already taken.`);
+        const ex = acc.get(login) || S.accounts.get(login);
+        if (ex && !ex.deleted) throw new Error(`The username ${login} is already taken.`);
         const a = {username:login, name, role, title:title||null, active:true, mustChange:true, pw:await makePw(pw), createdAt:new Date().toISOString(), createdBy:me, lastLoginAt:null};
         await B.set("accounts", login, a); return view({id:login, ...a});
       },
@@ -531,7 +562,7 @@ dialog h3{margin:0;font-size:17px}
   function FirebaseAuth(fb, B){
     const {auth, a, config} = fb;
     let cb = () => {}, quiet = false, pendingMsg = "";
-    const view = (id, d, email) => ({id, login:d.email||email||"", name:d.name||"", role:d.role, title:d.title||null, active:d.active===true, mustChange:!!d.mustChange, lastLoginAt:d.lastLoginAt||null});
+    const view = (id, d, email) => ({id, login:d.email||email||"", name:d.name||"", role:d.role, title:d.title||null, active:d.active===true && !d.deleted, deleted:!!d.deleted, mustChange:!!d.mustChange, lastLoginAt:d.lastLoginAt||null});
     const words = e => ({
       "auth/invalid-credential":"That email and password don't match.", "auth/wrong-password":"That email and password don't match.",
       "auth/user-not-found":"That email and password don't match.", "auth/invalid-login-credentials":"That email and password don't match.",
@@ -593,13 +624,18 @@ dialog h3{margin:0;font-size:17px}
         const app2 = fb.app.initializeApp(config, "add-" + Date.now()), auth2 = a.getAuth(app2);
         let uid;
         try{ const cred = await a.createUserWithEmailAndPassword(auth2, login, pw); uid = cred.user.uid; await a.signOut(auth2); }
-        catch(e){ fail(e); }
+        catch(e){
+          if (e && e.code==="auth/email-already-in-use") throw new Error("This email already has a login. If it belonged to a deleted account, remove it in Firebase console → Authentication → Users, then try again.");
+          fail(e);
+        }
         finally{ fb.app.deleteApp(app2).catch(()=>{}); }
         const d = {name, email:login, role, title:title||null, active:true, mustChange:true, createdAt:new Date().toISOString(), createdBy:me, lastLoginAt:null};
         try{ await B.set("users", uid, d); }catch(e){ fail(e); }
         return view(uid, d);
       },
-      async reset(acct){ try{ await a.sendPasswordResetEmail(auth, acct.login); }catch(e){ fail(e); } return {emailed:true}; }
+      async reset(acct){ try{ await a.sendPasswordResetEmail(auth, acct.login); }catch(e){ fail(e); } return {emailed:true}; },
+      canSelfReset: true,
+      async forgot(email){ try{ await a.sendPasswordResetEmail(auth, email); }catch(e){ if (e.code !== "auth/user-not-found") fail(e); } }
     };
   }
   async function loadFirebase(cfg){
@@ -646,7 +682,7 @@ dialog h3{margin:0;font-size:17px}
   function setPanel(p){
     mpanel = p;
     document.querySelectorAll("nav.sub button").forEach(b=>b.setAttribute("aria-selected", b.dataset.mp===p));
-    ["approvals","assets","locations","holds","report","accounts"].forEach(k=>$("#mp-"+k).hidden = k!==p);
+    ["approvals","assets","locations","holds","audit","report","accounts"].forEach(k=>$("#mp-"+k).hidden = k!==p);
     try{ if(me) localStorage.setItem("wms-panel-"+me,p); }catch(e){}
   }
   document.querySelectorAll("#viewSwitch button").forEach(b=>b.onclick=()=>setView(b.dataset.view));
@@ -683,12 +719,12 @@ dialog h3{margin:0;font-size:17px}
     if (serial && qty>1){ err.textContent="A serial number belongs to one unit. Set units to 1, or leave the serial blank."; err.hidden=false; return; }
     if (serial && assets().some(a=>a.serial===serial)){ err.textContent=`Serial ${serial} is already registered.`; err.hidden=false; return; }
     const tags = nextTags($("#a-prefix").value, qty);
-    const base = { name, category:$("#a-cat").value.trim(), model:$("#a-model").value.trim(), serial, notes:$("#a-notes").value.trim(), locationId:loc, status:"available", holderId:null, holdSince:null, dueBack:null, purpose:"", createdAt:new Date().toISOString(), createdBy:me };
+    const base = { name, category:$("#a-cat").value.trim(), model:$("#a-model").value.trim(), serial, accessories:$("#a-acc").value.trim(), notes:$("#a-notes").value.trim(), auditMonths:+$("#a-audit").value||3, locationId:loc, status:"available", holderId:null, holdSince:null, dueBack:null, purpose:"", createdAt:new Date().toISOString(), createdBy:me };
     try{
       for (const tag of tags){ await put("assets", slug(tag), {...base, tag}); }
       await log({action:"Created", tag: tags.length>1?`${tags[0]}…${tags.at(-1)}`:tags[0], name, note:`${qty} unit${qty>1?"s":""} at ${locCode(loc)}`});
       toast(`Created ${qty} asset${qty>1?"s":""}: ${tags.length>1?tags[0]+" to "+tags.at(-1):tags[0]}`);
-      ["#a-name","#a-model","#a-serial","#a-notes"].forEach(s=>$(s).value=""); $("#a-qty").value=1; updatePreview();
+      ["#a-name","#a-model","#a-serial","#a-acc","#a-notes"].forEach(s=>$(s).value=""); $("#a-qty").value=1; updatePreview();
     }catch(x){ failed(x); }
   });
 
@@ -740,11 +776,12 @@ dialog h3{margin:0;font-size:17px}
     });
   }
   const clearReturn = {returnRequestedAt:null, returnCondition:null, returnNote:""};
-  const clearLoan = {holderId:null, requestedAt:null, holdSince:null, dueBack:null, purpose:"", approvedBy:null, approvedAt:null, managerNote:"", returnDeclined:"", ...clearReturn};
+  const clearLoan = {holderId:null, requestedAt:null, holdSince:null, dueBack:null, purpose:"", approvedBy:null, approvedAt:null, managerNote:"", returnDeclined:"", cancelledAt:null, ...clearReturn};
   function approveReturn(id){
     const a=S.assets.get(id); if(!a) return;
     openDlg(`<h3>Approve return</h3>
       <p class="hint"><span class="tag">${esc(a.tag)}</span> · ${esc(a.name)} from <b>${esc(holderName(a.holderId))}</b>${a.returnNote?`<br>Their note: ${esc(a.returnNote)}`:""}</p>
+      ${accBox(a, "Check these accessories are back")}
       <label class="f">Condition after inspection<select id="d-cond"><option value="good" ${a.returnCondition!=="check"?"selected":""}>Complete and working – back to available stock</option><option value="check" ${a.returnCondition==="check"?"selected":""}>Needs repair or check – hold back from loans</option></select></label>
       <label class="f">Put back at<select id="d-loc">${locs().map(l=>`<option value="${esc(l.id)}" ${l.id===a.locationId?"selected":""}>${esc(l.code)}${l.zone?" · "+esc(l.zone):""}</option>`).join("")}</select></label>
       <label class="f">Inspection note<input id="d-note" placeholder="Optional"></label>
@@ -812,7 +849,8 @@ dialog h3{margin:0;font-size:17px}
     const a=S.assets.get(id); if(!a) return;
     openDlg(`<h3>Accept ${esc(a.name)}</h3>
       <p class="hint"><span class="tag">${esc(a.tag)}</span> · return by <b>${fmtDate(a.dueBack)}</b>${a.managerNote?`<br>Manager's note: ${esc(a.managerNote)}`:""}</p>
-      <p class="hint">Confirm you've received this item. It will be on hold under your name until you return it.</p>
+      ${accBox(a, "Make sure you also receive")}
+      <p class="hint">Confirm you've received this item and its accessories. It will be on hold under your name until you return it.</p>
       ${dlgBtns("I've received it")}`, async () => {
       try{
         const cur = await lockAndCheck(id, x=>x.status==="approved" && x.holderId===me); if(!cur) return;
@@ -824,12 +862,36 @@ dialog h3{margin:0;font-size:17px}
   }
   function cancelRequest(id){
     const a=S.assets.get(id); if(!a) return;
-    openDlg(`<h3>Withdraw request?</h3><p class="hint"><span class="tag">${esc(a.tag)}</span> · ${esc(a.name)} goes back to available stock.</p>${dlgBtns("Withdraw request")}`, async () => {
+    const wasApproved = a.status==="approved";
+    openDlg(`<h3>Withdraw request?</h3><p class="hint"><span class="tag">${esc(a.tag)}</span> · ${esc(a.name)}</p>
+      <p class="hint">${wasApproved ? "This was already approved, so the store manager will be told to put the item back in stock. If you've already collected it, keep it and tap Accept instead." : "The item goes back to available stock."}</p>${dlgBtns("Withdraw request")}`, async () => {
       try{
         const cur = await lockAndCheck(id, x=>(x.status==="requested"||x.status==="approved") && x.holderId===me); if(!cur) return;
-        await patch("assets", id, {status:"available", ...clearLoan});
-        await log({action:"Withdrawn", tag:a.tag, name:a.name, note:"", assetId:id, requesterId:me});
-        toast("Request withdrawn");
+        if (cur.status==="approved"){
+          await patch("assets", id, {status:"cancelled", cancelledAt:new Date().toISOString()});
+          await log({action:"Withdrawn after approval", tag:a.tag, name:a.name, note:"Waiting for the store manager to put it back in stock", assetId:id, requesterId:me});
+          toast("Request withdrawn. The store manager has been told to restock it.");
+        } else {
+          await patch("assets", id, {status:"available", ...clearLoan});
+          await log({action:"Withdrawn", tag:a.tag, name:a.name, note:"", assetId:id, requesterId:me});
+          toast("Request withdrawn");
+        }
+      }catch(x){ failed(x); }
+    });
+  }
+  function restockAsset(id){
+    const a=S.assets.get(id); if(!a) return;
+    openDlg(`<h3>Put back in stock</h3>
+      <p class="hint"><span class="tag">${esc(a.tag)}</span> · ${esc(a.name)} · withdrawn by <b>${esc(holderName(a.holderId))}</b> on ${fmtDT(a.cancelledAt)}</p>
+      ${accBox(a, "Check these are with it")}
+      <label class="f">Put back at<select id="d-loc">${locs().map(l=>`<option value="${esc(l.id)}" ${l.id===a.locationId?"selected":""}>${esc(l.code)}${l.zone?" · "+esc(l.zone):""}</option>`).join("")}</select></label>
+      ${dlgBtns("Confirm put back")}`, async () => {
+      const loc = $("#d-loc").value || a.locationId;
+      try{
+        const cur = await lockAndCheck(id, x=>x.status==="cancelled"); if(!cur) return;
+        await patch("assets", id, {status:"available", ...clearLoan, locationId:loc});
+        await log({action:"Restocked", tag:a.tag, name:a.name, note:`Back at ${locCode(loc)} after withdrawn request`, assetId:id, requesterId:a.holderId});
+        toast(`${a.tag} is back in stock at ${locCode(loc)}`);
       }catch(x){ failed(x); }
     });
   }
@@ -837,6 +899,7 @@ dialog h3{margin:0;font-size:17px}
     const a=S.assets.get(id); if(!a) return;
     openDlg(`<h3>${byManager?"Check in":"Return"} ${esc(a.name)}</h3>
       <p class="hint"><span class="tag">${esc(a.tag)}</span>${byManager?` · held by ${esc(holderName(a.holderId))}`:""}</p>
+      ${accBox(a, byManager ? "Accessories to check" : "Please return everything, including")}
       ${byManager?"":`<p class="hint">A manager will inspect the item and its accessories before the return is approved.${a.returnDeclined?`<br><b>Last time:</b> ${esc(a.returnDeclined)}`:""}</p>`}
       <label class="f">Condition<select id="d-cond"><option value="good">${byManager?"Good – back to available stock":"Complete, with all accessories"}</option><option value="check">${byManager?"Damaged or faulty – needs check":"Damaged, faulty or something missing"}</option></select></label>
       ${byManager?`<label class="f">Put back at<select id="d-loc">${locs().map(l=>`<option value="${esc(l.id)}" ${l.id===a.locationId?"selected":""}>${esc(l.code)}${l.zone?" · "+esc(l.zone):""}</option>`).join("")}</select></label>`:""}
@@ -862,15 +925,17 @@ dialog h3{margin:0;font-size:17px}
     const held = OUT.includes(a.status);
     openDlg(`<h3>${esc(a.tag)} · ${esc(a.name)}</h3>
       <div class="grid">
-        <label class="f">Status<select id="d-st" ${held?"disabled":""}>${["available","inspect","retired"].map(s=>`<option value="${s}" ${a.status===s?"selected":""}>${STATUS[s]}</option>`).join("")}${held?`<option selected>${STATUS[a.status]}</option>`:""}</select></label>
+        <label class="f">Status<select id="d-st" ${held?"disabled":""}>${["available","inspect","missing","retired"].map(s=>`<option value="${s}" ${a.status===s?"selected":""}>${STATUS[s]}</option>`).join("")}${held?`<option selected>${STATUS[a.status]}</option>`:""}</select></label>
         <label class="f">Location<select id="d-loc">${locs().map(l=>`<option value="${esc(l.id)}" ${l.id===a.locationId?"selected":""}>${esc(l.code)}</option>`).join("")}</select></label>
         <label class="f">Serial number<input id="d-serial" value="${esc(a.serial)}"></label>
         <label class="f">Category<input id="d-cat" value="${esc(a.category)}"></label>
+        <label class="f">Audit every<select id="d-aud">${[1,3,6,12].map(m=>`<option value="${m}" ${auditMonths(a)===m?"selected":""}>${m} month${m>1?"s":""}</option>`).join("")}</select></label>
       </div>
+      <label class="f">Accessories<input id="d-acc" value="${esc(a.accessories||"")}" placeholder="e.g. USB-C cable, wrist rest, carry pouch"></label>
       <label class="f">Notes / specs<textarea id="d-notes">${esc(a.notes||"")}</textarea></label>
-      ${held?`<p class="hint">${STATUS[a.status]} for ${esc(holderName(a.holderId))}. ${a.status==="on_hold"?"Use “Check in” on the On hold tab to release it.":"Approve or reject it on the Approvals tab."}</p>`:""}
+      ${held?`<p class="hint">${STATUS[a.status]} for ${esc(holderName(a.holderId))}. ${a.status==="on_hold"?"Use “Check in” on the On hold tab to release it.":"Deal with it on the Approvals tab."}</p>`:""}
       <div class="row" style="justify-content:space-between"><button class="btn danger" value="delete" type="button" id="d-del">Delete asset</button>${dlgBtns("Save changes").replace('<div class="row end">','<div class="row">')}</div>`, async () => {
-      const upd = {locationId:$("#d-loc").value, serial:$("#d-serial").value.trim(), category:$("#d-cat").value.trim(), notes:$("#d-notes").value.trim()};
+      const upd = {locationId:$("#d-loc").value, serial:$("#d-serial").value.trim(), category:$("#d-cat").value.trim(), accessories:$("#d-acc").value.trim(), notes:$("#d-notes").value.trim(), auditMonths:+$("#d-aud").value||3};
       if (!held) upd.status = $("#d-st").value;
       try{
         await patch("assets", id, upd);
@@ -898,26 +963,28 @@ dialog h3{margin:0;font-size:17px}
     if (act==="req") requestAsset(id); else if (act==="ret") returnAsset(id,false); else if (act==="checkin") returnAsset(id,true);
     else if (act==="approve") approveAsset(id); else if (act==="reject") rejectAsset(id);
     else if (act==="retok") approveReturn(id); else if (act==="retno") declineReturn(id);
-    else if (act==="accept") acceptAsset(id); else if (act==="withdraw") cancelRequest(id);
+    else if (act==="accept") acceptAsset(id); else if (act==="withdraw") cancelRequest(id); else if (act==="restock") restockAsset(id);
     else if (act==="manage") manageAsset(id); else if (act==="delloc") deleteLocation(id);
   });
 
   // ---------- renderers ----------
+  const accBox = (a, label) => `<p class="hint"><b>${esc(label||"Accessories")}:</b> ${a.accessories ? esc(a.accessories) : "none recorded"}</p>`;
   const notesLine = a => a.notes ? `<div class="sub2" style="max-width:52ch;white-space:pre-line">${esc(a.notes)}</div>` : "";
   function table(head, rows, emptyHtml){
     if (!rows.length) return `<div class="empty">${emptyHtml}</div>`;
     return `<div class="tablewrap"><table><thead><tr>${head.map(h=>`<th${h.startsWith("#")?' class="num"':""}>${esc(h.replace(/^#/,""))}</th>`).join("")}</tr></thead><tbody>${rows.join("")}</tbody></table></div>`;
   }
-  function match(a,q){ if(!q) return true; q=q.toLowerCase(); return [a.tag,a.name,a.serial,a.model,a.category,a.notes,locCode(a.locationId),holderName(a.holderId)].some(v=>String(v||"").toLowerCase().includes(q)); }
+  function match(a,q){ if(!q) return true; q=q.toLowerCase(); return [a.tag,a.name,a.serial,a.model,a.category,a.accessories,a.notes,locCode(a.locationId),holderName(a.holderId)].some(v=>String(v||"").toLowerCase().includes(q)); }
 
   function renderAssets(){
     const q=$("#a-search").value.trim(), fs=$("#a-fstatus").value, fl=$("#a-floc").value;
     const list = assets().filter(a=>match(a,q) && (!fs||a.status===fs) && (!fl||a.locationId===fl)).sort((x,y)=>x.tag.localeCompare(y.tag,undefined,{numeric:true}));
-    $("#assetTable").innerHTML = table(["Tag","Product","Category","Serial","Location","Status","Holder",""], list.map(a=>`<tr>
+    $("#assetTable").innerHTML = table(["Tag","Product","Category","Serial","Accessories","Location","Status","Holder",""], list.map(a=>`<tr>
       <td class="tag">${esc(a.tag)}</td><td>${esc(a.name)}${a.model?`<div class="sub2">${esc(a.model)}</div>`:""}${notesLine(a)}</td>
       <td>${esc(a.category||"–")}</td><td class="tag" style="font-weight:500">${esc(a.serial||"–")}</td>
+      <td class="sub2" style="max-width:24ch">${esc(a.accessories||"–")}</td>
       <td><span class="bin">${esc(locCode(a.locationId))}</span></td><td>${pill(a)}</td>
-      <td>${OUT.includes(a.status)?esc(holderName(a.holderId))+`<div class="sub2">Due ${fmtDate(a.dueBack)}</div>`:"–"}</td>
+      <td>${OUT.includes(a.status)?esc(holderName(a.holderId))+(a.status==="cancelled"?`<div class="sub2">Withdrawn – put back</div>`:`<div class="sub2">Due ${fmtDate(a.dueBack)}</div>`):"–"}</td>
       <td><button class="btn quiet sm" data-act="manage" data-id="${esc(a.id)}">Edit</button></td></tr>`),
       S.assets.size ? "No assets match this search." : "No assets yet. Fill in the form above to create your first one.");
   }
@@ -957,6 +1024,12 @@ dialog h3{margin:0;font-size:17px}
       <td class="sub2">${esc(a.returnNote||"–")}</td><td><span class="bin">${esc(locCode(a.locationId))}</span></td>
       <td><div class="row" style="flex-wrap:nowrap;gap:6px"><button class="btn sm" data-act="retok" data-id="${esc(a.id)}">Approve</button><button class="btn danger sm" data-act="retno" data-id="${esc(a.id)}">Decline</button></div></td></tr>`),
       "No returns waiting for inspection.");
+    const cxl = assets().filter(a=>a.status==="cancelled").sort((x,y)=>(x.cancelledAt||"").localeCompare(y.cancelledAt||""));
+    $("#cxlList").innerHTML = table(["Withdrawn","Person","Tag","Product","Usual location",""], cxl.map(a=>`<tr>
+      <td style="white-space:nowrap">${fmtDT(a.cancelledAt)}</td><td><b>${esc(holderName(a.holderId))}</b></td><td class="tag">${esc(a.tag)}</td><td>${esc(a.name)}</td>
+      <td><span class="bin">${esc(locCode(a.locationId))}</span></td>
+      <td><button class="btn sm" data-act="restock" data-id="${esc(a.id)}">Put back in stock</button></td></tr>`),
+      "Nothing to put back.");
     const appr = assets().filter(a=>a.status==="approved").sort((x,y)=>(x.approvedAt||"").localeCompare(y.approvedAt||""));
     $("#apprList").innerHTML = table(["Approved","Person","Tag","Product","Return by","Note",""], appr.map(a=>`<tr>
       <td style="white-space:nowrap">${fmtDT(a.approvedAt)}<div class="sub2">by ${esc(holderName(a.approvedBy))}</div></td><td><b>${esc(holderName(a.holderId))}</b></td><td class="tag">${esc(a.tag)}</td><td>${esc(a.name)}</td>
@@ -981,10 +1054,93 @@ dialog h3{margin:0;font-size:17px}
       return `<tr><td>${labelFn(k,true)}</td><td class="num">${g.length}</td><td class="num">${av}</td><td class="num">${oh}</td><td style="width:30%">${stackBar(av,oh,g.length-av-oh,g.length)}</td></tr>`;
     });
   }
+  // ---------- audits ----------
+  const AUDIT_DEFAULT = 3, AUDIT_SOON_DAYS = 14;
+  const RESULT = {ok:"Found – OK", issue:"Found – needs check", missing:"Missing"};
+  function addMonths(iso, n){ const d = new Date(iso), day = d.getDate(); d.setDate(1); d.setMonth(d.getMonth()+n); const last = new Date(d.getFullYear(), d.getMonth()+1, 0).getDate(); d.setDate(Math.min(day, last)); return ymd(d); }
+  const auditMonths = a => +a.auditMonths || AUDIT_DEFAULT;
+  const auditDue = a => addMonths(a.lastAuditAt || a.createdAt || new Date().toISOString(), auditMonths(a));
+  function auditState(a){ if (a.status==="retired") return "off"; const due = auditDue(a); if (due < today()) return "overdue"; if (due <= addDays(AUDIT_SOON_DAYS)) return "soon"; return "ok"; }
+  const AUDIT_PILL = {overdue:'<span class="pill s-overdue">Overdue</span>', soon:'<span class="pill s-requested">Due soon</span>', ok:'<span class="pill s-available">On schedule</span>', off:'<span class="pill s-retired">Not audited</span>'};
+  function auditCounts(){
+    const c = {overdue:0, soon:0, ok:0, done90:0}, since = addDays(-90);
+    assets().forEach(a=>{ const s = auditState(a); if (s!=="off") c[s]++; if (a.lastAuditAt && ymd(new Date(a.lastAuditAt)) >= since) c.done90++; });
+    return c;
+  }
+  const auSel = new Set();
+  function renderAudit(){
+    const c = auditCounts();
+    $("#au-tiles").innerHTML = [["Overdue",c.overdue,c.overdue>0],["Due in 14 days",c.soon],["On schedule",c.ok],["Audited in last 90 days",c.done90]].map(([l,v,al])=>`<div class="tile${al?" alert":""}"><b>${v}</b><span>${l}</span></div>`).join("");
+    fillSelect("#au-loc", locs().map(l=>({v:l.id, t:l.code})), "All locations");
+    const q = $("#au-search").value.trim().toLowerCase(), show = $("#au-show").value, fl = $("#au-loc").value;
+    const list = assets().filter(a=>{
+      const s = auditState(a); if (s==="off") return false;
+      if (show==="overdue" && s!=="overdue") return false;
+      if (show==="due" && s==="ok") return false;
+      if (fl && a.locationId!==fl) return false;
+      return !q || [a.tag,a.name,locCode(a.locationId),a.category].some(v=>String(v||"").toLowerCase().includes(q));
+    }).sort((x,y)=>auditDue(x).localeCompare(auditDue(y)) || x.tag.localeCompare(y.tag,undefined,{numeric:true}));
+    [...auSel].forEach(id=>{ if (!list.some(a=>a.id===id)) auSel.delete(id); });
+    const allOn = list.length && list.every(a=>auSel.has(a.id));
+    $("#au-table").innerHTML = list.length ? `<div class="tablewrap"><table><thead><tr><th><input type="checkbox" class="au-check" id="au-all" aria-label="Select all" ${allOn?"checked":""}></th><th>Tag</th><th>Product</th><th>Location</th><th>Status</th><th class="num">Every</th><th>Last audit</th><th>Next due</th><th></th><th></th></tr></thead><tbody>${list.map(a=>`<tr>
+      <td><input type="checkbox" class="au-check" data-au="${esc(a.id)}" aria-label="Select ${esc(a.tag)}" ${auSel.has(a.id)?"checked":""}></td>
+      <td class="tag">${esc(a.tag)}</td><td>${esc(a.name)}</td><td><span class="bin">${esc(locCode(a.locationId))}</span></td><td>${pill(a)}</td>
+      <td class="num">${auditMonths(a)} mo</td>
+      <td>${a.lastAuditAt?`${fmtDate(a.lastAuditAt)}<div class="sub2">${esc(RESULT[a.lastAuditResult]||"")} · ${esc(holderName(a.lastAuditBy))}</div>`:'<span class="sub2">Never</span>'}</td>
+      <td style="white-space:nowrap">${fmtDate(auditDue(a))}</td><td>${AUDIT_PILL[auditState(a)]}</td>
+      <td><button class="btn quiet sm" data-audit="${esc(a.id)}">Record audit</button></td></tr>`).join("")}</tbody></table></div>`
+      : `<div class="empty">${show==="all" ? "No assets to audit." : "Nothing is due. Switch to “All assets” to see the full schedule."}</div>`;
+    $("#au-bulk").hidden = !auSel.size; $("#au-selcount").textContent = `${auSel.size} selected`;
+    const done = S.history.filter(h=>h.action==="Audited").slice(0,15);
+    $("#au-hist").innerHTML = table(["When","Asset","Result","By"], done.map(h=>`<tr><td style="white-space:nowrap">${fmtDT(h.at)}</td><td><span class="tag">${esc(h.tag)}</span> <span class="sub2">${esc(h.name||"")}</span></td><td class="sub2">${esc(h.note||"")}</td><td>${esc(holderName(h.userId))}</td></tr>`), "No audits recorded yet.");
+  }
+  ["#au-search","#au-show","#au-loc"].forEach(s=>$(s).addEventListener("input", renderAudit));
+  $("#au-table").addEventListener("change", e => {
+    if (e.target.id==="au-all"){ $$au().forEach(id => e.target.checked ? auSel.add(id) : auSel.delete(id)); }
+    else if (e.target.dataset.au){ e.target.checked ? auSel.add(e.target.dataset.au) : auSel.delete(e.target.dataset.au); }
+    renderAudit();
+  });
+  const $$au = () => [...document.querySelectorAll("#au-table [data-au]")].map(x=>x.dataset.au);
+  $("#au-clear").onclick = () => { auSel.clear(); renderAudit(); };
+  async function recordAudit(a, res, loc, note){
+    const upd = {lastAuditAt:new Date().toISOString(), lastAuditBy:me, lastAuditResult:res, lastAuditNote:note||""};
+    const free = !OUT.includes(a.status);
+    if (res!=="missing" && free && loc && loc!==a.locationId) upd.locationId = loc;
+    if (res==="issue" && a.status==="available") upd.status = "inspect";
+    if (res==="missing" && free) upd.status = "missing";
+    if (res==="ok" && a.status==="missing") upd.status = "available";
+    await patch("assets", a.id, upd);
+    const moved = upd.locationId ? ` · moved ${locCode(a.locationId)} → ${locCode(upd.locationId)}` : "";
+    await log({action:"Audited", tag:a.tag, name:a.name, note:`${RESULT[res]}${moved}${note?" · "+note:""}`, assetId:a.id});
+  }
+  $("#au-bulkbtn").onclick = async () => {
+    const ids = [...auSel]; if (!ids.length) return;
+    const btn = $("#au-bulkbtn"); btn.disabled = true;
+    try{ for (const id of ids){ const a = S.assets.get(id); if (a) await recordAudit(a, "ok", a.locationId, ""); } auSel.clear(); toast(`${ids.length} asset${ids.length>1?"s":""} marked as audited`); }
+    catch(x){ failed(x); }
+    finally{ btn.disabled = false; renderAudit(); }
+  };
+  document.addEventListener("click", e => {
+    const b = e.target.closest("[data-audit]"); if (!b || !isMgr) return;
+    const a = S.assets.get(b.dataset.audit); if (!a) return;
+    const held = OUT.includes(a.status);
+    openDlg(`<h3>Audit ${esc(a.tag)} · ${esc(a.name)}</h3>
+      <p class="hint">Last audit: ${a.lastAuditAt?`${fmtDate(a.lastAuditAt)} (${esc(RESULT[a.lastAuditResult]||"")})`:"never"} · Due: ${fmtDate(auditDue(a))}${held?`<br>Currently ${esc(STATUS[a.status].toLowerCase())} by ${esc(holderName(a.holderId))}.`:""}</p>
+      ${accBox(a, "Should include")}
+      <label class="f">Result<select id="d-res"><option value="ok">Found – OK</option><option value="issue">Found – damaged or missing parts</option><option value="missing">Missing – couldn't find it</option></select></label>
+      ${held?"":`<label class="f">Found at<select id="d-loc">${locs().map(l=>`<option value="${esc(l.id)}" ${l.id===a.locationId?"selected":""}>${esc(l.code)}${l.zone?" · "+esc(l.zone):""}</option>`).join("")}</select></label>`}
+      <label class="f">Note<input id="d-note" placeholder="Optional, e.g. charger missing"></label>
+      <p class="hint">Next audit will be due ${fmtDate(addMonths(new Date().toISOString(), auditMonths(a)))}.</p>
+      ${dlgBtns("Save audit")}`, async () => {
+      try{ await recordAudit(a, $("#d-res").value, $("#d-loc") ? $("#d-loc").value : a.locationId, $("#d-note").value.trim()); auSel.delete(a.id); toast(`${a.tag} audited`); }
+      catch(x){ failed(x); }
+    });
+  });
+
   function renderReport(){
     const c=stats();
     $("#r-stamp").textContent = `Generated ${fmtDT(new Date().toISOString())} · ${S.locations.size} locations`;
-    const tiles=[["Total assets",c.total],["Available",c.available],["Pending approval",c.requested,c.requested>0],["Awaiting pickup",c.approved],["Returns to inspect",c.return_pending,c.return_pending>0],["On hold",c.on_hold],["Overdue",c.overdue,c.overdue>0],["Needs check",c.inspect],["Retired",c.retired]];
+    const tiles=[["Total assets",c.total],["Available",c.available],["Pending approval",c.requested,c.requested>0],["Awaiting pickup",c.approved],["Returns to inspect",c.return_pending,c.return_pending>0],["On hold",c.on_hold],["Overdue",c.overdue,c.overdue>0],["Needs check",c.inspect],["Missing",c.missing||0,(c.missing||0)>0],["Audits overdue",auditCounts().overdue,auditCounts().overdue>0],["Retired",c.retired]];
     $("#r-tiles").innerHTML = tiles.map(([l,v,al])=>`<div class="tile${al?" alert":""}"><b>${v}</b><span>${l}</span></div>`).join("");
     const H=["Location","#Total","#Avail.","#On hold",""];
     $("#r-loc").innerHTML = table(H, groupRows(a=>a.locationId, (k,html)=>html?`<span class="bin">${esc(locCode(k))}</span>`:locCode(k)), "No stock recorded yet.");
@@ -1008,7 +1164,7 @@ dialog h3{margin:0;font-size:17px}
       <td>${a.status==="return_pending"?'<span class="pill s-return_pending">Waiting for inspection</span>':`<button class="btn sm" data-act="ret" data-id="${esc(a.id)}">${a.returnDeclined?"Return again":"Return"}</button>`}</td></tr>`), "You're not holding any assets. Search below to request one.");
     const q=$("#u-search").value.trim(), fc=$("#u-fcat").value, only=$("#u-avail").checked;
     const list = assets().filter(a=>a.status!=="retired" && match(a,q) && (!fc||a.category===fc) && (!only||a.status==="available")).sort((x,y)=>x.name.localeCompare(y.name)||x.tag.localeCompare(y.tag,undefined,{numeric:true}));
-    $("#userTable").innerHTML = table(["Tag","Product","Category","Location","Status",""], list.map(a=>`<tr><td class="tag">${esc(a.tag)}</td><td>${esc(a.name)}${a.model?`<div class="sub2">${esc(a.model)}</div>`:""}${notesLine(a)}</td><td>${esc(a.category||"–")}</td><td><span class="bin">${esc(locCode(a.locationId))}</span></td><td>${pill(a)}${OUT.includes(a.status)?`<div class="sub2">Back ${fmtDate(a.dueBack)}</div>`:""}</td>
+    $("#userTable").innerHTML = table(["Tag","Product","Category","Location","Status",""], list.map(a=>`<tr><td class="tag">${esc(a.tag)}</td><td>${esc(a.name)}${a.model?`<div class="sub2">${esc(a.model)}</div>`:""}${a.accessories?`<div class="sub2"><b>Comes with:</b> ${esc(a.accessories)}</div>`:""}${notesLine(a)}</td><td>${esc(a.category||"–")}</td><td><span class="bin">${esc(locCode(a.locationId))}</span></td><td>${pill(a)}${OUT.includes(a.status)&&a.status!=="cancelled"?`<div class="sub2">Back ${fmtDate(a.dueBack)}</div>`:""}</td>
       <td>${a.status==="available"?`<button class="btn sm" data-act="req" data-id="${esc(a.id)}">Request</button>`:""}</td></tr>`),
       S.assets.size ? (only?"Nothing available matches. Untick “Available only” to see items that are out.":"No assets match this search.") : "The warehouse has no assets listed yet.");
   }
@@ -1024,6 +1180,8 @@ dialog h3{margin:0;font-size:17px}
     const items = myLog(), nu = unread().length;
     $("#unreadChip").hidden = !nu; $("#unreadChip").textContent = nu ? `${nu} new` : "";
     $("#markRead").hidden = !nu;
+    $("#newNote").hidden = !nu;
+    if (nu) $("#newNote").innerHTML = `<b style="color:var(--warn)">${nu} new update${nu>1?"s":""}</b> from the manager. <button type="button" class="linkbtn" id="toLog">See My activity</button>`;
     const sw = document.querySelector('#viewSwitch [data-view="user"]');
     if (sw) sw.innerHTML = "My desk" + (nu ? `<span class="n">${nu}</span>` : "");
     $("#myLog").innerHTML = items.length ? `<div class="log">${items.map(h=>{
@@ -1036,6 +1194,7 @@ dialog h3{margin:0;font-size:17px}
         ${h.note?`<div class="reason ${neg?"":dec?"ok":"plain"}"><b>${label}:</b> ${esc(h.note)}</div>`:(neg?`<div class="reason"><b>Reason:</b> none given</div>`:"")}</div></div>`;
     }).join("")}</div>` : `<div class="empty">No activity yet. Your requests, approvals, returns and any reasons from the manager will appear here.</div>`;
   }
+  document.addEventListener("click", e => { if (e.target.id==="toLog") $("#myLog").scrollIntoView({behavior:"smooth", block:"center"}); });
   $("#markRead").onclick = () => {
     const latest = myLog().reduce((m,h)=>h.at>m?h.at:m, seenAt);
     seenAt = latest; try{ localStorage.setItem("wms-seen-"+me, seenAt); }catch(e){}
@@ -1050,12 +1209,13 @@ dialog h3{margin:0;font-size:17px}
     fillSelect("#u-fcat", cats.map(c=>({v:c,t:c})), "All categories");
     $("#n-assets").textContent = S.assets.size; $("#n-locations").textContent = S.locations.size;
     $("#n-holds").textContent = assets().filter(a=>a.status==="on_hold").length;
-    const np = assets().filter(a=>a.status==="requested"||a.status==="return_pending").length;
+    const auc = auditCounts(); $("#n-audit").textContent = auc.overdue + auc.soon; $("#n-audit").classList.toggle("hot", auc.overdue>0);
+    const np = assets().filter(a=>a.status==="requested"||a.status==="return_pending"||a.status==="cancelled").length;
     $("#n-approvals").textContent = np; $("#n-approvals").classList.toggle("hot", np>0);
     updatePreview();
-    $("#n-accounts").textContent = [...S.accounts.values()].filter(a=>a.active!==false).length;
+    $("#n-accounts").textContent = [...S.accounts.values()].filter(a=>a.active).length;
     if (!me) return;
-    if (isMgr){ renderApprovals(); renderAssets(); renderLocations(); renderHolds(); renderReport(); renderAccounts(); }
+    if (isMgr){ renderApprovals(); renderAssets(); renderLocations(); renderHolds(); renderAudit(); renderReport(); renderAccounts(); }
     renderUser();
     resolveNames();
   }
@@ -1066,8 +1226,8 @@ dialog h3{margin:0;font-size:17px}
   // ---------- report export ----------
   function csv(){
     const cell=v=>{ v=String(v??""); return /[",\n]/.test(v)?`"${v.replace(/"/g,'""')}"`:v; };
-    const rows=[["Tag","Product","Model/SKU","Category","Serial","Location","Status","Holder","On hold since","Due back","Notes / specs"]];
-    assets().sort((x,y)=>x.tag.localeCompare(y.tag,undefined,{numeric:true})).forEach(a=>rows.push([a.tag,a.name,a.model,a.category,a.serial,locCode(a.locationId),isOverdue(a)?"Overdue":STATUS[a.status],a.status==="on_hold"?holderName(a.holderId):"",a.holdSince?a.holdSince.slice(0,10):"",a.dueBack||"",a.notes||""]));
+    const rows=[["Tag","Product","Model/SKU","Category","Serial","Location","Status","Holder","On hold since","Due back","Accessories","Notes / specs","Audit every (months)","Last audit","Last audit result","Next audit due"]];
+    assets().sort((x,y)=>x.tag.localeCompare(y.tag,undefined,{numeric:true})).forEach(a=>rows.push([a.tag,a.name,a.model,a.category,a.serial,locCode(a.locationId),isOverdue(a)?"Overdue":STATUS[a.status],a.status==="on_hold"?holderName(a.holderId):"",a.holdSince?a.holdSince.slice(0,10):"",a.dueBack||"",a.accessories||"",a.notes||"",auditMonths(a),a.lastAuditAt?ymd(new Date(a.lastAuditAt)):"",RESULT[a.lastAuditResult]||"",a.status==="retired"?"":auditDue(a)]));
     return rows.map(r=>r.map(cell).join(",")).join("\n");
   }
   $("#r-copy").onclick = async () => {
@@ -1157,7 +1317,7 @@ dialog h3{margin:0;font-size:17px}
     finally{ btn.disabled = false; }
   });
   function renderAccounts(){
-    const list = [...S.accounts.values()].sort((a,b)=>(!a.active)-(!b.active) || ["manager","assistant","staff"].indexOf(pickOf(a))-["manager","assistant","staff"].indexOf(pickOf(b)) || (a.name||"").localeCompare(b.name||""));
+    const list = [...S.accounts.values()].filter(a=>!a.deleted).sort((a,b)=>(!a.active)-(!b.active) || ["manager","assistant","staff"].indexOf(pickOf(a))-["manager","assistant","staff"].indexOf(pickOf(b)) || (a.name||"").localeCompare(b.name||""));
     $("#accTable").innerHTML = table(["Name",A.loginLabel,"Role","Status","Last login",""], list.map(a=>{
       const self = a.id===me, off = !a.active;
       return `<tr><td><b>${esc(a.name)}</b>${self?' <span class="sub2">(you)</span>':""}</td><td class="tag">${esc(a.login)}</td>
@@ -1167,7 +1327,8 @@ dialog h3{margin:0;font-size:17px}
       <td><div class="row" style="flex-wrap:nowrap;gap:6px">
         <button class="btn quiet sm" data-acc="reset" data-id="${esc(a.id)}">Reset password</button>
         ${self?"":`<button class="btn quiet sm" data-acc="role" data-id="${esc(a.id)}">Change role</button>
-        <button class="btn ${off?"quiet":"danger"} sm" data-acc="toggle" data-id="${esc(a.id)}">${off?"Enable":"Disable"}</button>`}
+        <button class="btn quiet sm" data-acc="toggle" data-id="${esc(a.id)}">${off?"Enable":"Disable"}</button>
+        <button class="btn danger sm" data-acc="delete" data-id="${esc(a.id)}">Delete</button>`}
       </div></td></tr>`;
     }), "No accounts yet.");
   }
@@ -1205,6 +1366,25 @@ dialog h3{margin:0;font-size:17px}
       openDlg(`<h3>${turnOff?"Disable":"Enable"} ${esc(a.name)}?</h3><p class="hint">${turnOff?`They won't be able to log in. Their history stays.${holding?` They still have ${holding} asset${holding>1?"s":""} requested or on loan.`:""}`:"They'll be able to log in again with their current password."}</p>${dlgBtns(turnOff?"Disable account":"Enable account")}`, async()=>{
         try{ await patch(A.coll, a.id, {active:!turnOff}); await log({action: turnOff?"Account disabled":"Account enabled", tag:a.login, name:a.name, note:""}); toast(`${a.name} ${turnOff?"disabled":"enabled"}`); }catch(x){ failed(x); }
       });
+    } else if (act==="delete"){
+      if (a.id===me){ toast("You can't delete your own account."); return; }
+      if (pickOf(a)==="manager" && a.active && storeManagers().length<=1){ toast("Keep at least one Store manager. Make someone else Store manager first."); return; }
+      const out = assets().filter(x=>x.holderId===a.id && OUT.includes(x.status));
+      if (out.length){
+        openDlg(`<h3>${esc(a.name)} still has assets</h3>
+          <p class="hint">Before deleting the account, clear these ${out.length} item${out.length>1?"s":""}: check in loans on the <b>On hold</b> tab, and reject or cancel requests on the <b>Approvals</b> tab.</p>
+          <div class="cred" style="user-select:text">${out.map(x=>`<span>${esc(STATUS[x.status])}</span>${esc(x.tag)} · ${esc(x.name)}`).join("")}</div>
+          <div class="row end"><button class="btn" value="ok">OK</button></div>`, async()=>{});
+        return;
+      }
+      const fbNote = A.kind==="firebase" ? " Their email stays registered with Firebase. To reuse it for a new account later, also delete it in Firebase console → Authentication → Users." : "";
+      openDlg(`<h3>Delete ${esc(a.name)}'s account?</h3>
+        <p class="hint">They won't be able to log in, and they'll be removed from the accounts list. Past loans and activity keep their name so your records stay complete. This can't be undone.${fbNote}</p>
+        <p class="hint">To block someone only for a while, use <b>Disable</b> instead.</p>
+        <div class="row end"><button class="btn quiet" value="cancel" formnovalidate>Cancel</button><button class="btn" value="ok" style="background:var(--bad);border-color:var(--bad)">Delete account</button></div>`, async()=>{
+        const tomb = {deleted:true, active:false, role:"staff", title:null, mustChange:false, deletedAt:new Date().toISOString(), deletedBy:me, ...(A.kind==="firebase" ? {email:""} : {pw:null})};
+        try{ await patch(A.coll, a.id, tomb); await log({action:"Account deleted", tag:a.login, name:a.name, note:""}); toast(`${a.name}'s account deleted`); }catch(x){ failed(x); }
+      });
     }
   });
 
@@ -1214,7 +1394,7 @@ dialog h3{margin:0;font-size:17px}
   function showGate(mode, msg){
     gateMode = mode;
     $("#gate").hidden = false; $("#app").hidden = true; $("#userbox").hidden = true;
-    const note = msg ? `<p class="err">${esc(msg)}</p>` : "";
+    const note = msg && typeof msg === "string" && mode!=="sent" ? `<p class="err">${esc(msg)}</p>` : "";
     const L = A ? A.loginLabel : "Username", ph = A ? A.loginPlaceholder : "";
     const loginInput = `<input id="g-user" required autocapitalize="none" spellcheck="false" autocomplete="username" ${A&&A.kind==="firebase"?'type="email"':""} placeholder="${esc(ph)}">`;
     if (mode==="setup") gateForm.innerHTML = `<h2>Set up the store manager account</h2>
@@ -1229,7 +1409,16 @@ dialog h3{margin:0;font-size:17px}
       <label class="f">Password<input id="g-pw" type="password" required autocomplete="current-password"></label>
       <label class="check"><input type="checkbox" id="g-keep"> Keep me logged in on this device</label>
       <button class="btn" type="submit">Log in</button>
-      <p class="hint">Forgot your password? Ask the store manager to reset it.</p>`;
+      ${A && A.canSelfReset ? `<p class="hint"><button type="button" class="linkbtn" id="g-forgot">Forgot password?</button></p>` : `<p class="hint">Forgot your password? Ask the store manager to reset it.</p>`}`;
+    else if (mode==="forgot") gateForm.innerHTML = `<h2>Reset your password</h2>
+      <p class="hint">Enter the email you log in with. We'll send you a link to choose a new password. Check your spam folder if it doesn't arrive within a few minutes.</p>${note}
+      <label class="f">Email<input id="g-user" type="email" required autocapitalize="none" spellcheck="false" autocomplete="username" value="${esc(msg && msg.prefill || "")}"></label>
+      <button class="btn" type="submit">Send reset link</button>
+      <p class="hint"><button type="button" class="linkbtn" id="g-back">Back to log in</button></p>`;
+    else if (mode==="sent") gateForm.innerHTML = `<h2>Check your email</h2>
+      <p class="ok-msg">If an account exists for <b>${esc(msg||"")}</b>, a reset link is on its way.</p>
+      <p class="hint">Open the link, choose a new password, then come back here and log in. The email comes from noreply@ your Firebase project address and may land in spam.</p>
+      <p class="hint"><button type="button" class="linkbtn" id="g-back">Back to log in</button></p>`;
     else if (mode==="change") gateForm.innerHTML = `<h2>Choose your own password</h2>
       <p class="hint">Welcome, ${esc(myAcct?.name||"")}. Replace the temporary password before you continue.</p>${note}
       <label class="f">New password<input id="g-pw" type="password" required minlength="8" autocomplete="new-password"></label>
@@ -1239,6 +1428,10 @@ dialog h3{margin:0;font-size:17px}
     else gateForm.innerHTML = `<p class="hint">${esc(msg||"Loading…")}</p>`;
     const f = gateForm.querySelector("input"); if (f) f.focus();
   }
+  gateForm.addEventListener("click", e => {
+    if (e.target.id==="g-forgot"){ const typed = $("#g-user") ? $("#g-user").value.trim() : ""; showGate("forgot", {prefill:typed}); }
+    else if (e.target.id==="g-back") showGate("login");
+  });
   gateForm.addEventListener("submit", async e => {
     e.preventDefault();
     const btn = gateForm.querySelector("button[type=submit]"); if (btn) btn.disabled = true;
@@ -1255,6 +1448,11 @@ dialog h3{margin:0;font-size:17px}
         const login=A.norm($("#g-user").value), pw=$("#g-pw").value, keep=$("#g-keep").checked;
         try{ await A.login(login, pw, keep); fails = 0; }
         catch(x){ fails++; if (fails>=5){ lockUntil=Date.now()+30000; fails=0; } return showGate("login", x.message); }
+      } else if (mode==="forgot"){
+        const email = A.norm($("#g-user").value), bad = A.check(email);
+        if (bad) return showGate("forgot", bad);
+        await A.forgot(email);
+        return showGate("sent", email);
       } else if (mode==="change"){
         const pw=$("#g-pw").value, bad = pwProblem(pw) || (pw!==$("#g-pw2").value ? "The two passwords don't match." : null);
         if (bad) return showGate("change", bad);
