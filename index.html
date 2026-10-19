@@ -314,8 +314,8 @@ dialog h3{margin:0;font-size:17px}
 
       <div class="card admin-only">
         <h2>Import or export assets</h2>
-        <p class="hint">Move stock between copies of the desk, or keep a backup. Export saves all locations and assets to a file. Import loads that file and skips anything already here.</p>
-        <div class="row"><input type="file" id="impFile" accept=".json,application/json" style="flex:1 1 220px;width:auto"><button class="btn quiet" type="button" id="impBtn">Import file</button><button class="btn ghost" type="button" id="expBtn">Export data</button></div>
+        <p class="hint">Export saves every asset to a spreadsheet (.csv) that opens in Excel. Import loads a spreadsheet in the same layout: use it to restore a backup, or to add many assets at once. Leave the Tag column blank and the desk numbers them for you. Rows whose tag is already here are skipped, and unknown location codes are created.</p>
+        <div class="row"><input type="file" id="impFile" accept=".csv,text/csv,.json,application/json" style="flex:1 1 220px;width:auto"><button class="btn quiet" type="button" id="impBtn">Import spreadsheet</button><button class="btn ghost" type="button" id="expBtn">Export to spreadsheet</button></div>
         <p class="hint" id="impMsg"></p>
       </div>
     </div>
@@ -1521,27 +1521,92 @@ dialog h3{margin:0;font-size:17px}
       setTimeout(()=>URL.revokeObjectURL(url), 2000); return true;
     }catch(e){ return false; }
   }
-  $("#r-csv").onclick = async () => { if (await saveFile(`warehouse-inventory-${today()}.csv`, csv(), "text/csv")) toast("Inventory report saved"); };
+  $("#r-csv").onclick = async () => { if (await saveFile(`warehouse-inventory-${today()}.csv`, "\uFEFF" + csv(), "text/csv")) toast("Inventory report saved"); };
+  // Spreadsheet (CSV) export / import. One row per asset; locations are matched by their code.
+  const CSV_COLS = [["tag","Tag"],["name","Product name"],["category","Category"],["model","Model / SKU"],["serial","Serial number"],
+    ["accessories","Accessories"],["notes","Notes / specs"],["loc","Location code"],["zone","Location zone"],["status","Status"],
+    ["auditMonths","Audit every (months)"],["lastAudit","Last audit"],["shipRef","Shipment / DO reference"],["eta","Expected arrival"],["created","Created"]];
+  const csvCell = v => { v = String(v ?? ""); return /[",\r\n]/.test(v) ? `"${v.replace(/"/g,'""')}"` : v; };
+  function parseCSV(text){
+    text = text.replace(/^\uFEFF/, ""); const rows = []; let row = [], f = "", q = false;
+    for (let i = 0; i < text.length; i++){
+      const c = text[i];
+      if (q){ if (c === '"'){ if (text[i+1] === '"'){ f += '"'; i++; } else q = false; } else f += c; }
+      else if (c === '"') q = true;
+      else if (c === ","){ row.push(f); f = ""; }
+      else if (c === "\n" || c === "\r"){ if (c === "\r" && text[i+1] === "\n") i++; row.push(f); rows.push(row); row = []; f = ""; }
+      else f += c;
+    }
+    if (f !== "" || row.length){ row.push(f); rows.push(row); }
+    return rows.filter(r => r.some(x => String(x).trim() !== ""));
+  }
+  const statusFromText = t => { t = String(t||"").trim().toLowerCase(); if (!t) return "available";
+    const hit = Object.entries(STATUS).find(([k,v]) => k===t || v.toLowerCase()===t || (t.startsWith("in transit") && k==="in_transit"));
+    return hit ? hit[0] : "available"; };
   $("#expBtn").onclick = async () => {
-    const strip = ({id, ...d}) => ({id, ...d});
-    const data = {exportedAt:new Date().toISOString(), locations:locs().map(strip), assets:assets().map(strip)};
-    if (await saveFile(`wms-data-export-${today()}.json`, JSON.stringify(data, null, 1), "application/json")) toast(`Exported ${data.assets.length} assets and ${data.locations.length} locations`);
+    const lines = [CSV_COLS.map(c=>c[1])].concat(assets().sort((x,y)=>x.tag.localeCompare(y.tag,undefined,{numeric:true})).map(a=>{
+      const l = S.locations.get(a.locationId) || {};
+      const v = {tag:a.tag, name:a.name, category:a.category, model:a.model, serial:a.serial, accessories:a.accessories, notes:a.notes,
+        loc:l.code||"", zone:l.zone||"", status:STATUS[a.status]||a.status, auditMonths:auditMonths(a), lastAudit:a.lastAuditAt?ymd(new Date(a.lastAuditAt)):"",
+        shipRef:a.shipRef||"", eta:a.eta||"", created:a.createdAt?ymd(new Date(a.createdAt)):""};
+      return CSV_COLS.map(c=>v[c[0]]);
+    }));
+    if (await saveFile(`warehouse-assets-${today()}.csv`, "\uFEFF" + lines.map(r=>r.map(csvCell).join(",")).join("\r\n"), "text/csv")) toast(`Exported ${lines.length-1} assets`);
   };
+  async function importJSON(file, text){
+    let data; try{ data = JSON.parse(text); }catch(e){ throw new Error("That file isn't a desk export."); }
+    const L = (data.locations||[]).filter(x=>x && x.id && x.code && !S.locations.has(x.id));
+    const As = (data.assets||[]).filter(x=>x && x.id && x.tag && !S.assets.has(x.id)).map(x => OUT.includes(x.status) ? {...x, status:"available", ...clearLoan} : x);
+    return {L, As, skipped:(data.assets||[]).length - As.length};
+  }
+  async function importCSV(file, text){
+    const rows = parseCSV(text); if (rows.length < 2) throw new Error("That spreadsheet has no rows to import.");
+    const head = rows[0].map(h=>h.trim().toLowerCase());
+    const col = key => { const label = CSV_COLS.find(c=>c[0]===key)[1].toLowerCase(); return head.findIndex(h => h===label || h===key.toLowerCase()); };
+    const idx = Object.fromEntries(CSV_COLS.map(([k])=>[k, col(k)]));
+    if (idx.name < 0) throw new Error("The spreadsheet needs a “Product name” column. Export once to get a template with the right headings.");
+    const byCode = new Map(locs().map(l=>[l.code.toUpperCase(), l.id])), newLocs = new Map(), As = [], usedTags = new Set(assets().map(a=>a.tag));
+    let skipped = 0, autoTags = 0; const now = new Date().toISOString();
+    const pending = rows.slice(1).map(r => Object.fromEntries(Object.entries(idx).map(([k,i]) => [k, i>=0 ? String(r[i]??"").trim() : ""])));
+    // New tags continue after the highest RZ number on the desk or in the file.
+    // One spelling per category: the desk's if it has one, otherwise the most common in the file (capitalised wins a tie).
+    const catPick = new Map(); categories().forEach(c=>catPick.set(c.toLowerCase(), c));
+    const tally = {}; pending.forEach(r=>{ if (r.category) (tally[r.category.toLowerCase()] ||= {})[r.category] = ((tally[r.category.toLowerCase()]||{})[r.category]||0)+1; });
+    Object.entries(tally).forEach(([k,v])=>{ if (!catPick.has(k)) catPick.set(k, Object.entries(v).sort((a,b)=>b[1]-a[1] || (/^[A-Z]/.test(b[0])-/^[A-Z]/.test(a[0])))[0][0]); });
+    let maxN = 0; [...usedTags, ...pending.map(r=>r.tag)].forEach(t=>{ const m = String(t||"").match(/^RZ-(\d+)$/); if (m) maxN = Math.max(maxN, +m[1]); });
+    const fresh = pending.filter(r=>!r.tag).map(()=>`RZ-${String(++maxN).padStart(4,"0")}`); let fi = 0;
+    for (const r of pending){
+      if (!r.name){ skipped++; continue; }
+      const tag = r.tag || (autoTags++, fresh[fi++]);
+      if (usedTags.has(tag) || S.assets.has(slug(tag))){ skipped++; continue; }
+      usedTags.add(tag);
+      let locId = "";
+      if (r.loc){ const code = r.loc.toUpperCase(); locId = byCode.get(code) || (newLocs.get(code)||{}).id;
+        if (!locId){ locId = slug(code); newLocs.set(code, {id:locId, code, type:"Shelf", zone:r.zone, description:"", createdAt:now}); byCode.set(code, locId); } }
+      else locId = (locs()[0]||{}).id || "";
+      let st = statusFromText(r.status); if (OUT.includes(st)) st = "available";
+      As.push({id:slug(tag), tag, name:r.name, category:(r.category ? catPick.get(r.category.toLowerCase()) : ""), model:r.model, serial:r.serial,
+        accessories:r.accessories, notes:r.notes, locationId:locId, status:st, auditMonths:+r.auditMonths||AUDIT_DEFAULT,
+        lastAuditAt: /^\d{4}-\d{2}-\d{2}$/.test(r.lastAudit) ? new Date(r.lastAudit+"T00:00:00").toISOString() : null,
+        ...(st==="in_transit" ? {transitFrom:"SG", shipRef:r.shipRef, eta:/^\d{4}-\d{2}-\d{2}$/.test(r.eta)?r.eta:null, dispatchedAt:now, dispatchedBy:me} : {}),
+        holderId:null, holdSince:null, dueBack:null, purpose:"", createdAt: /^\d{4}-\d{2}-\d{2}$/.test(r.created) ? new Date(r.created+"T00:00:00").toISOString() : now, createdBy:me});
+    }
+    return {L:[...newLocs.values()], As, skipped, autoTags};
+  }
   $("#impBtn").onclick = async () => {
     const file = $("#impFile").files[0];
-    if (!file){ toast("Choose the export file first."); return; }
-    let data; try{ data = JSON.parse(await file.text()); }catch(e){ toast("That file isn't a desk export."); return; }
-    const L = (data.locations||[]).filter(x=>x && x.id && x.code && !S.locations.has(x.id));
-    const As = (data.assets||[]).filter(x=>x && x.id && x.tag && !S.assets.has(x.id))
-      .map(x => OUT.includes(x.status) ? {...x, status:"available", ...clearLoan} : x);
-    if (!L.length && !As.length){ toast("Nothing new to import. Everything in that file is already here."); return; }
+    if (!file){ toast("Choose a spreadsheet (.csv) or backup file first."); return; }
     const btn = $("#impBtn"); btn.disabled = true;
     try{
-      await setMany("locations", L); await setMany("assets", As);
-      await log({action:"Imported", tag:`${As.length} assets`, name:file.name, note:`${L.length} locations, ${As.length} assets`});
-      $("#impMsg").textContent = `Imported ${As.length} assets and ${L.length} locations. Items already on the desk were skipped.`;
+      const text = await file.text();
+      const r = /\.json$/i.test(file.name) || /^\s*\{/.test(text) ? await importJSON(file, text) : await importCSV(file, text);
+      if (!r.L.length && !r.As.length){ toast(r.skipped ? `Nothing new to import. ${r.skipped} row${r.skipped>1?"s were":" was"} already here or had no product name.` : "Nothing to import."); return; }
+      if (!r.As.every(a=>a.locationId) && !r.L.length && !S.locations.size) throw new Error("Add a location first, or fill in the Location code column.");
+      await setMany("locations", r.L); await setMany("assets", r.As);
+      await log({action:"Imported", tag:`${r.As.length} assets`, name:file.name, note:`${r.As.length} assets, ${r.L.length} new location${r.L.length===1?"":"s"}${r.skipped?`, ${r.skipped} skipped`:""}`});
+      $("#impMsg").textContent = `Imported ${r.As.length} asset${r.As.length===1?"":"s"}${r.L.length?` and created ${r.L.length} new location${r.L.length===1?"":"s"}`:""}.${r.autoTags?` ${r.autoTags} got new tags automatically.`:""}${r.skipped?` ${r.skipped} row${r.skipped>1?"s were":" was"} skipped (tag already on the desk, or no product name).`:""}`;
       toast("Import finished");
-    }catch(x){ failed(x); }
+    }catch(x){ if (x instanceof Error && !x.code) toast(x.message); else failed(x); }
     finally{ btn.disabled = false; }
   };
 
@@ -1765,7 +1830,7 @@ dialog h3{margin:0;font-size:17px}
   $("#lg-csv").onclick = async () => {
     const cell = v => { v = String(v ?? ""); return /[",\n]/.test(v) ? `"${v.replace(/"/g,'""')}"` : v; };
     const lines = [["When","Action","Tag","Product","By","For","Detail"]].concat(logRows().map(h=>[h.at ? new Date(h.at).toLocaleString() : "", h.action, h.tag, h.name, realName(h.userId), h.requesterId && h.requesterId!==h.userId ? realName(h.requesterId) : "", h.note]));
-    if (await saveFile(`activity-log-${today()}.csv`, lines.map(r=>r.map(cell).join(",")).join("\n"), "text/csv")) toast("Activity log saved");
+    if (await saveFile(`activity-log-${today()}.csv`, "\uFEFF" + lines.map(r=>r.map(cell).join(",")).join("\n"), "text/csv")) toast("Activity log saved");
   };
   const realName = id => { if (!id) return ""; const a = S.accounts.get(id); return a ? (a.name || a.login) : (id===me && myAcct ? myAcct.name : holderName(id)); };
   function showLogFor(text){
