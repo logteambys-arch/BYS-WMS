@@ -314,7 +314,7 @@ dialog h3{margin:0;font-size:17px}
 
       <div class="card admin-only">
         <h2>Import or export assets</h2>
-        <p class="hint">Export saves every asset to a spreadsheet (.csv) that opens in Excel. Import loads a spreadsheet in the same layout: use it to restore a backup, or to add many assets at once. Leave the Tag column blank and the desk numbers them for you. Rows whose tag is already here are skipped, and unknown location codes are created.</p>
+        <p class="hint">Export saves every asset to a spreadsheet (.csv) that opens in Excel. Import reads a spreadsheet in the same layout. New rows become new assets (leave Tag blank to have them numbered). Rows whose tag is already here update that asset's details. Status, location and loans are never changed by an import. You'll see a summary to confirm before anything is saved.</p>
         <div class="row"><input type="file" id="impFile" accept=".csv,text/csv,.json,application/json" style="flex:1 1 220px;width:auto"><button class="btn quiet" type="button" id="impBtn">Import spreadsheet</button><button class="btn ghost" type="button" id="expBtn">Export to spreadsheet</button></div>
         <p class="hint" id="impMsg"></p>
       </div>
@@ -1557,7 +1557,7 @@ dialog h3{margin:0;font-size:17px}
     let data; try{ data = JSON.parse(text); }catch(e){ throw new Error("That file isn't a desk export."); }
     const L = (data.locations||[]).filter(x=>x && x.id && x.code && !S.locations.has(x.id));
     const As = (data.assets||[]).filter(x=>x && x.id && x.tag && !S.assets.has(x.id)).map(x => OUT.includes(x.status) ? {...x, status:"available", ...clearLoan} : x);
-    return {L, As, skipped:(data.assets||[]).length - As.length};
+    return {L, As, updates:[], unchanged:0, skipped:(data.assets||[]).length - As.length};
   }
   async function importCSV(file, text){
     const rows = parseCSV(text); if (rows.length < 2) throw new Error("That spreadsheet has no rows to import.");
@@ -1565,7 +1565,8 @@ dialog h3{margin:0;font-size:17px}
     const col = key => { const label = CSV_COLS.find(c=>c[0]===key)[1].toLowerCase(); return head.findIndex(h => h===label || h===key.toLowerCase()); };
     const idx = Object.fromEntries(CSV_COLS.map(([k])=>[k, col(k)]));
     if (idx.name < 0) throw new Error("The spreadsheet needs a “Product name” column. Export once to get a template with the right headings.");
-    const byCode = new Map(locs().map(l=>[l.code.toUpperCase(), l.id])), newLocs = new Map(), As = [], usedTags = new Set(assets().map(a=>a.tag));
+    const byCode = new Map(locs().map(l=>[l.code.toUpperCase(), l.id])), newLocs = new Map(), As = [], updates = [], usedTags = new Set(assets().map(a=>a.tag));
+    let unchanged = 0;
     let skipped = 0, autoTags = 0; const now = new Date().toISOString();
     const pending = rows.slice(1).map(r => Object.fromEntries(Object.entries(idx).map(([k,i]) => [k, i>=0 ? String(r[i]??"").trim() : ""])));
     // New tags continue after the highest RZ number on the desk or in the file.
@@ -1576,9 +1577,22 @@ dialog h3{margin:0;font-size:17px}
     let maxN = 0; [...usedTags, ...pending.map(r=>r.tag)].forEach(t=>{ const m = String(t||"").match(/^RZ-(\d+)$/); if (m) maxN = Math.max(maxN, +m[1]); });
     const fresh = pending.filter(r=>!r.tag).map(()=>`RZ-${String(++maxN).padStart(4,"0")}`); let fi = 0;
     for (const r of pending){
-      if (!r.name){ skipped++; continue; }
+      if (!r.name && !r.tag){ skipped++; continue; }
       const tag = r.tag || (autoTags++, fresh[fi++]);
-      if (usedTags.has(tag) || S.assets.has(slug(tag))){ skipped++; continue; }
+      const existing = S.assets.get(slug(tag)) || assets().find(a=>a.tag===tag);
+      if (existing){
+        // Update details only. Status, location, holder and audit dates never change through an import.
+        // A blank cell leaves the current value alone.
+        const upd = {locationId:existing.locationId, auditMonths:auditMonths(existing)};
+        const pick = (k, v) => { if (v !== "" && v !== (existing[k]||"")) upd[k] = v; };
+        pick("name", r.name); pick("model", r.model); pick("serial", r.serial); pick("accessories", r.accessories); pick("notes", r.notes);
+        if (r.category) pick("category", catPick.get(r.category.toLowerCase()));
+        if (+r.auditMonths && [1,3,6,12].includes(+r.auditMonths)) upd.auditMonths = +r.auditMonths;
+        const changes = editChanges(existing, {...existing, ...upd, status:undefined});
+        if (changes.length) updates.push({a:existing, upd, changes}); else unchanged++;
+        continue;
+      }
+      if (!r.name || usedTags.has(tag)){ skipped++; continue; }
       usedTags.add(tag);
       let locId = "";
       if (r.loc){ const code = r.loc.toUpperCase(); locId = byCode.get(code) || (newLocs.get(code)||{}).id;
@@ -1591,23 +1605,39 @@ dialog h3{margin:0;font-size:17px}
         ...(st==="in_transit" ? {transitFrom:"SG", shipRef:r.shipRef, eta:/^\d{4}-\d{2}-\d{2}$/.test(r.eta)?r.eta:null, dispatchedAt:now, dispatchedBy:me} : {}),
         holderId:null, holdSince:null, dueBack:null, purpose:"", createdAt: /^\d{4}-\d{2}-\d{2}$/.test(r.created) ? new Date(r.created+"T00:00:00").toISOString() : now, createdBy:me});
     }
-    return {L:[...newLocs.values()], As, skipped, autoTags};
+    return {L:[...newLocs.values()], As, updates, unchanged, skipped, autoTags};
   }
   $("#impBtn").onclick = async () => {
     const file = $("#impFile").files[0];
     if (!file){ toast("Choose a spreadsheet (.csv) or backup file first."); return; }
-    const btn = $("#impBtn"); btn.disabled = true;
+    let r;
     try{
       const text = await file.text();
-      const r = /\.json$/i.test(file.name) || /^\s*\{/.test(text) ? await importJSON(file, text) : await importCSV(file, text);
-      if (!r.L.length && !r.As.length){ toast(r.skipped ? `Nothing new to import. ${r.skipped} row${r.skipped>1?"s were":" was"} already here or had no product name.` : "Nothing to import."); return; }
-      if (!r.As.every(a=>a.locationId) && !r.L.length && !S.locations.size) throw new Error("Add a location first, or fill in the Location code column.");
-      await setMany("locations", r.L); await setMany("assets", r.As);
-      await log({action:"Imported", tag:`${r.As.length} assets`, name:file.name, note:`${r.As.length} assets, ${r.L.length} new location${r.L.length===1?"":"s"}${r.skipped?`, ${r.skipped} skipped`:""}`});
-      $("#impMsg").textContent = `Imported ${r.As.length} asset${r.As.length===1?"":"s"}${r.L.length?` and created ${r.L.length} new location${r.L.length===1?"":"s"}`:""}.${r.autoTags?` ${r.autoTags} got new tags automatically.`:""}${r.skipped?` ${r.skipped} row${r.skipped>1?"s were":" was"} skipped (tag already on the desk, or no product name).`:""}`;
-      toast("Import finished");
-    }catch(x){ if (x instanceof Error && !x.code) toast(x.message); else failed(x); }
-    finally{ btn.disabled = false; }
+      r = /\.json$/i.test(file.name) || /^\s*\{/.test(text) ? await importJSON(file, text) : await importCSV(file, text);
+    }catch(x){ toast(x.message || "That file couldn't be read."); return; }
+    if (!r.L.length && !r.As.length && !r.updates.length){
+      toast(r.unchanged ? `Nothing to change. All ${r.unchanged} asset${r.unchanged>1?"s":""} in the file already match the desk.` : r.skipped ? `Nothing to import. ${r.skipped} row${r.skipped>1?"s have":" has"} no product name.` : "Nothing to import.");
+      return;
+    }
+    const lines = r.updates.slice(0,12).map(u=>`<li><span class="tag">${esc(u.a.tag)}</span> ${esc(u.changes.map(c=>c.text).join("; "))}</li>`).join("");
+    openDlg(`<h3>Import ${esc(file.name)}</h3>
+      <div class="cred" style="user-select:text"><span>New assets</span>${r.As.length}${r.autoTags?` (${r.autoTags} numbered automatically)`:""}<span>Assets updated</span>${r.updates.length}<span>Unchanged</span>${r.unchanged}${r.L.length?`<span>New locations</span>${r.L.map(l=>esc(l.code)).join(", ")}`:""}${r.skipped?`<span>Skipped</span>${r.skipped} (no product name)`:""}</div>
+      ${r.updates.length?`<p class="hint" style="margin:0"><b>Changes to existing assets:</b></p><ul class="hint" style="margin:0;padding-left:18px;max-height:180px;overflow:auto">${lines}${r.updates.length>12?`<li>…and ${r.updates.length-12} more</li>`:""}</ul>`:""}
+      <p class="hint" style="margin:0">Status, location, who holds an item, and audit dates are never changed by an import. Blank cells leave the current value as it is.</p>
+      ${dlgBtns("Apply import")}`, async () => {
+      try{
+        if (r.As.some(a=>!a.locationId) && !r.L.length && !S.locations.size){ toast("Add a location first, or fill in the Location code column."); return false; }
+        await setMany("locations", r.L); await setMany("assets", r.As);
+        for (const u of r.updates){
+          const {locationId, ...fields} = u.upd;
+          await patch("assets", u.a.id, fields);
+          await log({action:"Edited", tag:u.a.tag, name:fields.name||u.a.name, note:`From spreadsheet: ${u.changes.map(c=>c.text).join("; ")}`, assetId:u.a.id});
+        }
+        await log({action:"Imported", tag:`${r.As.length} new, ${r.updates.length} updated`, name:file.name, note:`${r.As.length} new, ${r.updates.length} updated, ${r.unchanged} unchanged${r.L.length?`, ${r.L.length} new location${r.L.length===1?"":"s"}`:""}${r.skipped?`, ${r.skipped} skipped`:""}`});
+        $("#impMsg").textContent = `Done: ${r.As.length} new asset${r.As.length===1?"":"s"}, ${r.updates.length} updated, ${r.unchanged} unchanged${r.L.length?`, ${r.L.length} new location${r.L.length===1?"":"s"}`:""}.`;
+        toast("Import finished");
+      }catch(x){ failed(x); }
+    });
   };
 
   // ---------- accounts tab (store manager) ----------
