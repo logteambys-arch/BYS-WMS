@@ -120,7 +120,7 @@ nav.sub .n.hot{background:var(--warn);color:var(--surface)}
 .holder-h strong{font-size:14px}
 .two{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:16px}
 @media (max-width:420px){.two{grid-template-columns:1fr}}
-dialog{border:1px solid var(--line);border-radius:8px;background:var(--surface);color:var(--ink);padding:0;width:min(460px,calc(100vw - 32px))}
+dialog{border:1px solid var(--line);border-radius:8px;background:var(--surface);color:var(--ink);padding:0;width:min(460px,calc(100vw - 32px));max-height:calc(100dvh - 32px);overflow-y:auto}
 dialog::backdrop{background:rgba(10,16,20,.45)}
 dialog form{display:flex;flex-direction:column;gap:14px;padding:20px}
 dialog h3{margin:0;font-size:17px}
@@ -142,6 +142,54 @@ dialog h3{margin:0;font-size:17px}
 .cred span{color:var(--muted);font:500 12px var(--font-ui);text-transform:uppercase;letter-spacing:.05em;align-self:center}
 .pwrow{display:flex;gap:8px}
 .pwrow input{flex:1}
+/* ---------- phone layout ---------- */
+@media (max-width:700px){
+  .wrap{padding-block:12px 40px;gap:14px}
+  .brand h1{font-size:19px}
+  header.top{gap:10px}
+  .userbox{width:100%;display:grid;grid-template-columns:1fr 1fr;gap:6px}
+  .userbox .seg{width:100%;grid-column:1/-1;display:flex}
+  .userbox .seg button{flex:1;padding:9px 8px}
+  .userbox .btn.sm{padding:9px 10px}
+  nav.sub{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--bg);margin-inline:-4px;padding-inline:4px;scrollbar-width:none}
+  nav.sub::-webkit-scrollbar{display:none}
+  nav.sub button{padding:11px 10px;font-size:13.5px}
+  .card{padding:14px;gap:12px}
+  .card h2 small{display:block;margin:2px 0 0}
+  .tiles{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+  .tile{padding:8px 10px}
+  .tile b{font-size:19px}
+  .tile span{font-size:10.5px;letter-spacing:.03em}
+  .tools > *{flex:1 1 100%}
+  .tools select{width:100%}
+  input,select,textarea{font-size:16px;padding:10px 11px}
+  .btn{padding:10px 14px;font-size:14px}
+  .btn.sm{padding:8px 12px;font-size:13px;min-height:38px}
+  .row.end{justify-content:stretch}
+  .row.end > .btn{flex:1}
+  /* tables become stacked cards */
+  .tablewrap{border:0;overflow:visible}
+  table.stack, table.stack tbody, table.stack tr, table.stack td{display:block;width:100%}
+  table.stack thead{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+  table.stack tr{border:1px solid var(--line);border-radius:var(--r);background:var(--surface);padding:6px 0;margin-bottom:10px}
+  table.stack td[data-empty]{display:none}
+  table.stack td{border:0;padding:3px 12px 3px 40%;position:relative;min-height:28px;text-align:left!important;white-space:normal!important;max-width:none!important}
+  table.stack td::before{content:attr(data-label);position:absolute;left:12px;top:5px;width:calc(40% - 20px);font-size:11px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--muted)}
+  table.stack td[data-label=""]{padding-left:12px}
+  table.stack td[data-label=""]::before{display:none}
+  table.stack td:first-child{padding-top:8px}
+  table.stack td .row{flex-wrap:wrap!important}
+  table.stack td .row > .btn, table.stack td > .btn{flex:1}
+  table.stack td > .btn{width:100%}
+  .holder{border:0;overflow:visible}
+  .holder-h{border:1px solid var(--line);border-radius:var(--r);margin-bottom:8px}
+  .holder > div[style]{overflow:visible!important}
+  .log-i{grid-template-columns:1fr}
+  .cred{grid-template-columns:1fr;font-size:14px}
+  .cred span{margin-top:6px}
+  dialog form{padding:16px}
+  .gate{padding-block:2vh 0}
+}
 @media (prefers-reduced-motion:no-preference){.btn,.seg button{transition:background .12s,color .12s}}
 </style>
 </head>
@@ -176,7 +224,7 @@ dialog h3{margin:0;font-size:17px}
       <button type="button" role="tab" data-mp="approvals" aria-selected="false">Approvals<span class="n" id="n-approvals">0</span></button>
       <button type="button" role="tab" data-mp="assets" aria-selected="true">Assets<span class="n" id="n-assets">0</span></button>
       <button type="button" role="tab" data-mp="locations" aria-selected="false">Locations<span class="n" id="n-locations">0</span></button>
-      <button type="button" role="tab" data-mp="holds" aria-selected="false">On hold<span class="n" id="n-holds">0</span></button>
+      <button type="button" role="tab" data-mp="holds" aria-selected="false">Who has what<span class="n" id="n-holds">0</span></button>
       <button type="button" role="tab" data-mp="audit" aria-selected="false">Audit<span class="n" id="n-audit">0</span></button>
       <button type="button" role="tab" data-mp="report" aria-selected="false">Inventory report</button>
       <button type="button" role="tab" data-mp="accounts" aria-selected="false">Accounts<span class="n" id="n-accounts">0</span></button>
@@ -232,7 +280,7 @@ dialog h3{margin:0;font-size:17px}
         <h2>Create new assets</h2>
         <div class="grid">
           <label class="f">Product name<input id="a-name" required placeholder="e.g. BlackWidow V4 Pro"></label>
-          <label class="f">Category<input id="a-cat" list="catList" placeholder="e.g. Keyboard"></label>
+          <label class="f">Category<span id="a-cat-wrap" style="display:flex;flex-direction:column;gap:6px"></span></label>
           <label class="f">Model / SKU<input id="a-model" placeholder="e.g. RZ03-04680100"></label>
           <label class="f">Serial number<input id="a-serial" placeholder="Leave blank if several units"></label>
           <label class="f">Store at location<select id="a-loc" required></select></label>
@@ -249,6 +297,11 @@ dialog h3{margin:0;font-size:17px}
           <button class="btn" type="submit">Create assets</button>
         </div>
       </form>
+
+      <div class="card">
+        <h2>Categories <small>fix a spelling or merge two categories; every asset in it is updated</small></h2>
+        <div id="catTable"></div>
+      </div>
 
       <div class="card">
         <h2>Import or export assets</h2>
@@ -292,14 +345,17 @@ dialog h3{margin:0;font-size:17px}
 
     <!-- Holds -->
     <div class="panel" id="mp-holds" hidden>
+      <div class="tiles" id="h-tiles"></div>
       <div class="card">
-        <h2>Assets currently on hold <small>grouped by person</small></h2>
+        <h2>Who has what <small>every asset that's out of the warehouse, grouped by person</small></h2>
         <div class="tools">
           <input type="search" id="h-search" placeholder="Search person, tag or product">
-          <label class="row" style="gap:6px;font-size:13px"><input type="checkbox" id="h-overdue" style="width:auto"> Overdue only</label>
+          <select id="h-person" aria-label="Person"></select>
+          <select id="h-show" aria-label="Which items"><option value="all">Everything they hold or are collecting</option><option value="loan">On loan only</option><option value="overdue">Overdue only</option></select>
         </div>
         <div id="holdList" class="panel"></div>
       </div>
+    </div>
     </div>
 
     <!-- Audit -->
@@ -694,7 +750,60 @@ dialog h3{margin:0;font-size:17px}
     el.innerHTML = (first?`<option value="">${esc(first)}</option>`:"") + opts.map(o=>`<option value="${esc(o.v)}">${esc(o.t)}</option>`).join("");
     if ([...el.options].some(o=>o.value===keep)) el.value = keep;
   }
-  function categories(){ return [...new Set(assets().map(a=>a.category).filter(Boolean))].sort(); }
+  function categories(){ return [...new Set(assets().map(a=>a.category).filter(Boolean))].sort((x,y)=>x.localeCompare(y)); }
+  // Category picker: existing categories + "add new". Typing a name that already exists (any capitals) reuses it.
+  function catSelectHtml(id, current){
+    const cats = categories(); if (current && !cats.includes(current)) cats.push(current);
+    return `<select id="${id}" data-catsel>${`<option value="">Choose a category</option>`}${cats.map(c=>`<option value="${esc(c)}" ${c===current?"selected":""}>${esc(c)}</option>`).join("")}<option value="__new">+ Add a new category…</option></select><input id="${id}-new" hidden placeholder="New category name, e.g. Keyboard">`;
+  }
+  function readCat(id){
+    const v = $("#"+id).value;
+    if (v !== "__new") return v;
+    const typed = $("#"+id+"-new").value.trim().replace(/\s+/g," ");
+    return categories().find(c=>c.toLowerCase()===typed.toLowerCase()) || typed;
+  }
+  document.addEventListener("change", e => {
+    if (!e.target.matches("[data-catsel]")) return;
+    const box = document.getElementById(e.target.id+"-new"); if (!box) return;
+    box.hidden = e.target.value !== "__new"; if (!box.hidden) box.focus();
+  });
+  function renderCatPicker(){
+    const wrap = $("#a-cat-wrap"); const sel = $("#a-cat");
+    const keep = sel ? sel.value : "", typed = sel ? $("#a-cat-new").value : "";
+    if (sel && keep==="__new") return;   // don't wipe a name being typed
+    wrap.innerHTML = catSelectHtml("a-cat", "");
+    if (keep && [...$("#a-cat").options].some(o=>o.value===keep)) $("#a-cat").value = keep;
+    $("#a-cat-new").value = typed;
+  }
+  function renderCategories(){
+    const counts = {}; assets().forEach(a=>{ const c = a.category || ""; counts[c] = (counts[c]||0)+1; });
+    const rows = categories().map(c=>`<tr><td><b>${esc(c)}</b></td><td class="num">${counts[c]}</td><td><button class="btn quiet sm" data-catren="${esc(c)}">Rename</button></td></tr>`);
+    if (counts[""]) rows.push(`<tr><td class="sub2">No category</td><td class="num">${counts[""]}</td><td class="sub2">Set it with Edit on each asset</td></tr>`);
+    $("#catTable").innerHTML = table(["Category","#Assets",""], rows, "No categories yet. They appear here once assets have one.");
+  }
+  document.addEventListener("click", e => {
+    const b = e.target.closest("[data-catren]"); if (!b || !isMgr) return;
+    const old = b.dataset.catren, list = assets().filter(a=>a.category===old);
+    openDlg(`<h3>Rename category</h3>
+      <p class="hint"><b>${esc(old)}</b> is used by ${list.length} asset${list.length>1?"s":""}. All of them will be updated.</p>
+      <label class="f">New name<input id="d-catname" value="${esc(old)}" required></label>
+      <p class="hint" id="d-catmerge" hidden></p>
+      ${dlgBtns("Rename")}`, async () => {
+      let nn = $("#d-catname").value.trim().replace(/\s+/g," ");
+      if (!nn){ toast("Enter a category name."); return false; }
+      const existing = categories().find(c=>c!==old && c.toLowerCase()===nn.toLowerCase()); if (existing) nn = existing;
+      if (nn===old) return;
+      try{
+        for (const a of list) await patch("assets", a.id, {category:nn});
+        await log({action:"Category renamed", tag:`${list.length} assets`, name:old, note:`${old} → ${nn}${existing?" (merged)":""}`});
+        toast(existing ? `Merged ${old} into ${nn}` : `Renamed ${old} to ${nn}`);
+      }catch(x){ failed(x); }
+    });
+    $("#d-catname").addEventListener("input", () => {
+      const v = $("#d-catname").value.trim().toLowerCase(), ex = categories().find(c=>c!==old && c.toLowerCase()===v);
+      $("#d-catmerge").hidden = !ex; if (ex) $("#d-catmerge").innerHTML = `<b>${esc(ex)}</b> already exists. The two categories will be merged into one.`;
+    });
+  });
 
   // ---------- tag generation ----------
   function nextTags(prefix, n){
@@ -719,7 +828,7 @@ dialog h3{margin:0;font-size:17px}
     if (serial && qty>1){ err.textContent="A serial number belongs to one unit. Set units to 1, or leave the serial blank."; err.hidden=false; return; }
     if (serial && assets().some(a=>a.serial===serial)){ err.textContent=`Serial ${serial} is already registered.`; err.hidden=false; return; }
     const tags = nextTags($("#a-prefix").value, qty);
-    const base = { name, category:$("#a-cat").value.trim(), model:$("#a-model").value.trim(), serial, accessories:$("#a-acc").value.trim(), notes:$("#a-notes").value.trim(), auditMonths:+$("#a-audit").value||3, locationId:loc, status:"available", holderId:null, holdSince:null, dueBack:null, purpose:"", createdAt:new Date().toISOString(), createdBy:me };
+    const base = { name, category:readCat("a-cat"), model:$("#a-model").value.trim(), serial, accessories:$("#a-acc").value.trim(), notes:$("#a-notes").value.trim(), auditMonths:+$("#a-audit").value||3, locationId:loc, status:"available", holderId:null, holdSince:null, dueBack:null, purpose:"", createdAt:new Date().toISOString(), createdBy:me };
     try{
       for (const tag of tags){ await put("assets", slug(tag), {...base, tag}); }
       await log({action:"Created", tag: tags.length>1?`${tags[0]}…${tags.at(-1)}`:tags[0], name, note:`${qty} unit${qty>1?"s":""} at ${locCode(loc)}`});
@@ -928,14 +1037,14 @@ dialog h3{margin:0;font-size:17px}
         <label class="f">Status<select id="d-st" ${held?"disabled":""}>${["available","inspect","missing","retired"].map(s=>`<option value="${s}" ${a.status===s?"selected":""}>${STATUS[s]}</option>`).join("")}${held?`<option selected>${STATUS[a.status]}</option>`:""}</select></label>
         <label class="f">Location<select id="d-loc">${locs().map(l=>`<option value="${esc(l.id)}" ${l.id===a.locationId?"selected":""}>${esc(l.code)}</option>`).join("")}</select></label>
         <label class="f">Serial number<input id="d-serial" value="${esc(a.serial)}"></label>
-        <label class="f">Category<input id="d-cat" value="${esc(a.category)}"></label>
+        <label class="f">Category${catSelectHtml("d-cat", a.category||"")}</label>
         <label class="f">Audit every<select id="d-aud">${[1,3,6,12].map(m=>`<option value="${m}" ${auditMonths(a)===m?"selected":""}>${m} month${m>1?"s":""}</option>`).join("")}</select></label>
       </div>
       <label class="f">Accessories<input id="d-acc" value="${esc(a.accessories||"")}" placeholder="e.g. USB-C cable, wrist rest, carry pouch"></label>
       <label class="f">Notes / specs<textarea id="d-notes">${esc(a.notes||"")}</textarea></label>
-      ${held?`<p class="hint">${STATUS[a.status]} for ${esc(holderName(a.holderId))}. ${a.status==="on_hold"?"Use “Check in” on the On hold tab to release it.":"Deal with it on the Approvals tab."}</p>`:""}
+      ${held?`<p class="hint">${STATUS[a.status]} for ${esc(holderName(a.holderId))}. ${a.status==="on_hold"?"Use “Check in” on the Who has what tab to release it.":"Deal with it on the Approvals tab."}</p>`:""}
       <div class="row" style="justify-content:space-between"><button class="btn danger" value="delete" type="button" id="d-del">Delete asset</button>${dlgBtns("Save changes").replace('<div class="row end">','<div class="row">')}</div>`, async () => {
-      const upd = {locationId:$("#d-loc").value, serial:$("#d-serial").value.trim(), category:$("#d-cat").value.trim(), accessories:$("#d-acc").value.trim(), notes:$("#d-notes").value.trim(), auditMonths:+$("#d-aud").value||3};
+      const upd = {locationId:$("#d-loc").value, serial:$("#d-serial").value.trim(), category:readCat("d-cat"), accessories:$("#d-acc").value.trim(), notes:$("#d-notes").value.trim(), auditMonths:+$("#d-aud").value||3};
       if (!held) upd.status = $("#d-st").value;
       try{
         await patch("assets", id, upd);
@@ -997,18 +1106,30 @@ dialog h3{margin:0;font-size:17px}
       <td><button class="btn quiet sm" data-act="delloc" data-id="${esc(l.id)}">Delete</button></td></tr>`;
     }), "No locations yet. Create shelves, racks or bins above, then assign assets to them.");
   }
+  const HELD = ["approved","on_hold","return_pending"];
   function renderHolds(){
-    const q=$("#h-search").value.trim(), od=$("#h-overdue").checked;
-    const held = assets().filter(a=>(a.status==="on_hold"||a.status==="return_pending") && match(a,q) && (!od||isOverdue(a)));
+    const all = assets().filter(a=>HELD.includes(a.status) && a.holderId);
+    const people = [...new Set(all.map(a=>a.holderId))].sort((x,y)=>holderName(x).localeCompare(holderName(y)));
+    const tiles = [["People holding assets", people.length], ["On loan", all.filter(a=>a.status==="on_hold").length],
+      ["Waiting to be collected", all.filter(a=>a.status==="approved").length], ["Returns being inspected", all.filter(a=>a.status==="return_pending").length],
+      ["Overdue", all.filter(isOverdue).length, all.some(isOverdue)]];
+    $("#h-tiles").innerHTML = tiles.map(([l,v,al])=>`<div class="tile${al?" alert":""}"><b>${v}</b><span>${l}</span></div>`).join("");
+    fillSelect("#h-person", people.map(id=>({v:id, t:holderName(id)})), "All people");
+    const q=$("#h-search").value.trim(), who=$("#h-person").value, show=$("#h-show").value;
+    const held = all.filter(a=>(!who||a.holderId===who) && match(a,q) && (show!=="loan"||a.status==="on_hold") && (show!=="overdue"||isOverdue(a)));
     const groups = {}; held.forEach(a=>(groups[a.holderId]=groups[a.holderId]||[]).push(a));
     const keys = Object.keys(groups).sort((x,y)=>holderName(x).localeCompare(holderName(y)));
+    const label = a => a.status==="approved" ? '<span class="pill s-approved">Waiting to be collected</span>' : a.status==="return_pending" ? '<span class="pill s-return_pending">Return being inspected</span>' : isOverdue(a) ? '<span class="pill s-overdue">Overdue</span>' : '<span class="pill s-on_hold">On loan</span>';
     $("#holdList").innerHTML = keys.length ? keys.map(k=>{
-      const g=groups[k].sort((x,y)=>(x.dueBack||"").localeCompare(y.dueBack||"")), ov=g.filter(isOverdue).length;
-      return `<div class="holder"><div class="holder-h"><strong>${esc(holderName(k))}</strong><span class="row" style="gap:8px"><span class="sub2">${g.length} asset${g.length>1?"s":""}</span>${ov?`<span class="pill s-overdue">${ov} overdue</span>`:""}</span></div>
-      <div style="overflow-x:auto"><table><thead><tr><th>Tag</th><th>Product</th><th>Since</th><th>Due back</th><th>Purpose</th><th></th></tr></thead><tbody>${g.map(a=>`<tr>
-        <td class="tag">${esc(a.tag)}</td><td>${esc(a.name)}</td><td>${fmtDate(a.holdSince)}</td><td>${fmtDate(a.dueBack)} ${isOverdue(a)?'<span class="pill s-overdue">Overdue</span>':""}${a.status==="return_pending"?' <span class="pill s-return_pending">Return pending</span>':""}</td>
-        <td class="sub2">${esc(a.purpose||"–")}</td><td><button class="btn quiet sm" data-act="checkin" data-id="${esc(a.id)}">Check in</button></td></tr>`).join("")}</tbody></table></div></div>`;
-    }).join("") : `<div class="empty">${od?"Nothing is overdue.":"Nobody is holding any assets right now."}</div>`;
+      const g=groups[k].sort((x,y)=>(x.dueBack||"").localeCompare(y.dueBack||"")), ov=g.filter(isOverdue).length, acct=S.accounts.get(k);
+      const loan=g.filter(a=>a.status==="on_hold").length;
+      return `<div class="holder"><div class="holder-h"><span><strong>${esc(holderName(k))}</strong>${acct?` <span class="sub2">${esc(acct.login)} · ${esc(roleLabel(acct))}</span>`:""}</span><span class="row" style="gap:8px"><span class="sub2">${g.length} item${g.length>1?"s":""}${loan!==g.length?` · ${loan} on loan`:""}</span>${ov?`<span class="pill s-overdue">${ov} overdue</span>`:""}</span></div>
+      <div style="overflow-x:auto"><table><thead><tr><th>Tag</th><th>Product</th><th>Status</th><th>Since</th><th>Due back</th><th>Purpose</th><th></th></tr></thead><tbody>${g.map(a=>`<tr>
+        <td class="tag">${esc(a.tag)}</td><td>${esc(a.name)}${a.accessories?`<div class="sub2">With: ${esc(a.accessories)}</div>`:""}</td><td>${label(a)}</td>
+        <td style="white-space:nowrap">${a.status==="approved"?`<span class="sub2">Approved ${fmtDate(a.approvedAt)}</span>`:fmtDate(a.holdSince)}</td>
+        <td style="white-space:nowrap">${fmtDate(a.dueBack)}</td><td class="sub2">${esc(a.purpose||"–")}</td>
+        <td>${a.status==="approved"?"":`<button class="btn quiet sm" data-act="checkin" data-id="${esc(a.id)}">Check in</button>`}</td></tr>`).join("")}</tbody></table></div></div>`;
+    }).join("") : `<div class="empty">${all.length ? "No items match these filters." : "Nobody is holding any assets right now. Items appear here once a request is approved."}</div>`;
   }
   function renderApprovals(){
     const pend = assets().filter(a=>a.status==="requested").sort((x,y)=>(x.requestedAt||"").localeCompare(y.requestedAt||""));
@@ -1205,10 +1326,10 @@ dialog h3{margin:0;font-size:17px}
     fillSelect("#a-loc", L, L.length?"":"Create a location first");
     fillSelect("#a-floc", L.map(o=>({v:o.v,t:o.t})), "All locations");
     const cats = categories();
-    $("#catList").innerHTML = cats.map(c=>`<option value="${esc(c)}">`).join("");
+    renderCatPicker(); if (isMgr) renderCategories();
     fillSelect("#u-fcat", cats.map(c=>({v:c,t:c})), "All categories");
     $("#n-assets").textContent = S.assets.size; $("#n-locations").textContent = S.locations.size;
-    $("#n-holds").textContent = assets().filter(a=>a.status==="on_hold").length;
+    $("#n-holds").textContent = new Set(assets().filter(a=>["approved","on_hold","return_pending"].includes(a.status) && a.holderId).map(a=>a.holderId)).size;
     const auc = auditCounts(); $("#n-audit").textContent = auc.overdue + auc.soon; $("#n-audit").classList.toggle("hot", auc.overdue>0);
     const np = assets().filter(a=>a.status==="requested"||a.status==="return_pending"||a.status==="cancelled").length;
     $("#n-approvals").textContent = np; $("#n-approvals").classList.toggle("hot", np>0);
@@ -1220,7 +1341,7 @@ dialog h3{margin:0;font-size:17px}
     resolveNames();
   }
   ["#a-search","#a-fstatus","#a-floc"].forEach(s=>$(s).addEventListener("input",renderAssets));
-  ["#h-search","#h-overdue"].forEach(s=>$(s).addEventListener("input",renderHolds));
+  ["#h-search","#h-person","#h-show"].forEach(s=>$(s).addEventListener("input",renderHolds));
   ["#u-search","#u-fcat","#u-avail"].forEach(s=>$(s).addEventListener("input",renderUser));
 
   // ---------- report export ----------
@@ -1372,7 +1493,7 @@ dialog h3{margin:0;font-size:17px}
       const out = assets().filter(x=>x.holderId===a.id && OUT.includes(x.status));
       if (out.length){
         openDlg(`<h3>${esc(a.name)} still has assets</h3>
-          <p class="hint">Before deleting the account, clear these ${out.length} item${out.length>1?"s":""}: check in loans on the <b>On hold</b> tab, and reject or cancel requests on the <b>Approvals</b> tab.</p>
+          <p class="hint">Before deleting the account, clear these ${out.length} item${out.length>1?"s":""}: check in loans on the <b>Who has what</b> tab, and reject or cancel requests on the <b>Approvals</b> tab.</p>
           <div class="cred" style="user-select:text">${out.map(x=>`<span>${esc(STATUS[x.status])}</span>${esc(x.tag)} · ${esc(x.name)}`).join("")}</div>
           <div class="row end"><button class="btn" value="ok">OK</button></div>`, async()=>{});
         return;
@@ -1566,6 +1687,18 @@ dialog h3{margin:0;font-size:17px}
     applyLabels();
     A.start(onAuthState);
   }
+  // ---------- phone layout: give every table cell its column name ----------
+  function labelTables(root){
+    (root||document).querySelectorAll("table").forEach(t=>{
+      const heads=[...t.querySelectorAll("thead th")].map(th=>th.textContent.trim());
+      if (!heads.length) return;
+      t.classList.add("stack");
+      t.querySelectorAll("tbody tr").forEach(tr=>[...tr.children].forEach((td,i)=>{ if (!td.hasAttribute("data-label")) td.setAttribute("data-label", heads[i]||""); if (/^[–-]?$/.test(td.textContent.trim()) && !td.querySelector("input,button")) td.setAttribute("data-empty",""); else td.removeAttribute("data-empty"); }));
+    });
+  }
+  let labelQueued = false;
+  new MutationObserver(()=>{ if (labelQueued) return; labelQueued = true; requestAnimationFrame(()=>{ labelQueued = false; labelTables(); }); })
+    .observe(document.body, {childList:true, subtree:true});
   boot();
 })();
 </script>
