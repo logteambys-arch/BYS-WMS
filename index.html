@@ -225,6 +225,7 @@ dialog h3{margin:0;font-size:17px}
   <section id="view-manager" class="panel">
     <nav class="sub" role="tablist">
       <button type="button" role="tab" data-mp="approvals" aria-selected="false" class="admin-only">Approvals<span class="n" id="n-approvals">0</span></button>
+      <button type="button" role="tab" data-mp="create" aria-selected="false">Asset Creation</button>
       <button type="button" role="tab" data-mp="assets" aria-selected="true">Assets<span class="n" id="n-assets">0</span></button>
       <button type="button" role="tab" data-mp="transit" aria-selected="false">Transit<span class="n" id="n-transit">0</span></button>
       <button type="button" role="tab" data-mp="locations" aria-selected="false">Locations<span class="n" id="n-locations">0</span></button>
@@ -280,7 +281,7 @@ dialog h3{margin:0;font-size:17px}
     </div>
 
     <!-- Assets -->
-    <div class="panel" id="mp-assets" hidden>
+    <div class="panel" id="mp-create" hidden>
       <form class="card" id="assetForm" autocomplete="off">
         <h2>Create new assets</h2>
         <div class="grid">
@@ -317,7 +318,9 @@ dialog h3{margin:0;font-size:17px}
         <div class="row"><input type="file" id="impFile" accept=".json,application/json" style="flex:1 1 220px;width:auto"><button class="btn quiet" type="button" id="impBtn">Import file</button><button class="btn ghost" type="button" id="expBtn">Export data</button></div>
         <p class="hint" id="impMsg"></p>
       </div>
+    </div>
 
+    <div class="panel" id="mp-assets" hidden>
       <div class="card">
         <h2>All assets</h2>
         <div class="tools">
@@ -779,7 +782,7 @@ dialog h3{margin:0;font-size:17px}
   function setPanel(p){
     mpanel = p;
     document.querySelectorAll("nav.sub button").forEach(b=>b.setAttribute("aria-selected", b.dataset.mp===p));
-    ["approvals","assets","transit","locations","holds","audit","report","log","accounts"].forEach(k=>$("#mp-"+k).hidden = k!==p);
+    ["approvals","create","assets","transit","locations","holds","audit","report","log","accounts"].forEach(k=>$("#mp-"+k).hidden = k!==p);
     try{ if(me) localStorage.setItem("wms-panel-"+me,p); }catch(e){}
   }
   document.querySelectorAll("#viewSwitch button").forEach(b=>b.onclick=()=>setView(b.dataset.view));
