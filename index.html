@@ -82,6 +82,8 @@ td.num,th.num{text-align:right}
 .s-inspect{background:var(--warn-soft);color:var(--warn)}
 .s-retired{background:var(--idle-soft);color:var(--idle)}
 .s-missing{background:var(--bad-soft);color:var(--bad)}
+.s-in_transit{background:var(--warn-soft);color:var(--warn)}
+.pm-mode .admin-only{display:none!important}
 .au-check{width:auto;margin:0}
 .s-requested{background:var(--warn-soft);color:var(--warn)}
 .s-approved{background:var(--pend-soft);color:var(--pend)}
@@ -138,6 +140,7 @@ dialog h3{margin:0;font-size:17px}
 .role-admin{background:var(--accent-soft);color:var(--accent)}
 .role-staff{background:var(--idle-soft);color:var(--idle)}
 .role-assistant{background:var(--pend-soft);color:var(--pend)}
+.role-pm{background:var(--ok-soft);color:var(--ok)}
 .cred{font:600 15px var(--font-code);background:var(--sunk);border:1px dashed var(--line);border-radius:4px;padding:12px 14px;display:grid;grid-template-columns:auto 1fr;gap:4px 14px;user-select:all}
 .cred span{color:var(--muted);font:500 12px var(--font-ui);text-transform:uppercase;letter-spacing:.05em;align-self:center}
 .pwrow{display:flex;gap:8px}
@@ -221,13 +224,15 @@ dialog h3{margin:0;font-size:17px}
   <!-- ================= MANAGER ================= -->
   <section id="view-manager" class="panel">
     <nav class="sub" role="tablist">
-      <button type="button" role="tab" data-mp="approvals" aria-selected="false">Approvals<span class="n" id="n-approvals">0</span></button>
+      <button type="button" role="tab" data-mp="approvals" aria-selected="false" class="admin-only">Approvals<span class="n" id="n-approvals">0</span></button>
       <button type="button" role="tab" data-mp="assets" aria-selected="true">Assets<span class="n" id="n-assets">0</span></button>
+      <button type="button" role="tab" data-mp="transit" aria-selected="false">Transit<span class="n" id="n-transit">0</span></button>
       <button type="button" role="tab" data-mp="locations" aria-selected="false">Locations<span class="n" id="n-locations">0</span></button>
       <button type="button" role="tab" data-mp="holds" aria-selected="false">Who has what<span class="n" id="n-holds">0</span></button>
-      <button type="button" role="tab" data-mp="audit" aria-selected="false">Audit<span class="n" id="n-audit">0</span></button>
+      <button type="button" role="tab" data-mp="audit" aria-selected="false" class="admin-only">Audit<span class="n" id="n-audit">0</span></button>
       <button type="button" role="tab" data-mp="report" aria-selected="false">Inventory report</button>
-      <button type="button" role="tab" data-mp="accounts" aria-selected="false">Accounts<span class="n" id="n-accounts">0</span></button>
+      <button type="button" role="tab" data-mp="log" aria-selected="false">Activity log</button>
+      <button type="button" role="tab" data-mp="accounts" aria-selected="false" class="admin-only">Accounts<span class="n" id="n-accounts">0</span></button>
     </nav>
 
     <!-- Accounts -->
@@ -238,7 +243,7 @@ dialog h3{margin:0;font-size:17px}
         <div class="grid">
           <label class="f">Full name<input id="u-name" required placeholder="e.g. Tan Kang Zheng"></label>
           <label class="f"><span id="u-user-label">Username</span><input id="u-user" required placeholder="e.g. kangzheng" autocapitalize="none" spellcheck="false"></label>
-          <label class="f">Role<select id="u-role"><option value="staff">Staff – request and return assets</option><option value="assistant">Assistant Store Manager – full access</option><option value="manager">Store manager – full access</option></select></label>
+          <label class="f">Role<select id="u-role"><option value="staff">Staff – request and return assets</option><option value="pm">Project manager – creates assets, tracks transit</option><option value="assistant">Assistant Store Manager – full access</option><option value="manager">Store manager – full access</option></select></label>
           <label class="f">Temporary password<div class="pwrow"><input id="u-pw" required minlength="8" autocomplete="new-password"><button class="btn quiet" type="button" id="u-gen">Generate</button></div></label>
         </div>
         <p class="err" id="accErr" hidden></p>
@@ -283,7 +288,10 @@ dialog h3{margin:0;font-size:17px}
           <label class="f">Category<span id="a-cat-wrap" style="display:flex;flex-direction:column;gap:6px"></span></label>
           <label class="f">Model / SKU<input id="a-model" placeholder="e.g. RZ03-04680100"></label>
           <label class="f">Serial number<input id="a-serial" placeholder="Leave blank if several units"></label>
-          <label class="f">Store at location<select id="a-loc" required></select></label>
+          <label class="f">Where is it now?<select id="a-where"><option value="kl">In KL – on the shelf now</option><option value="sg">In SG – shipping to KL (in transit)</option></select></label>
+          <label class="f" data-transit hidden>Shipment / DO reference<input id="a-ship" placeholder="e.g. DO-24518 or courier tracking no."></label>
+          <label class="f" data-transit hidden>Expected arrival in KL<input type="date" id="a-eta"></label>
+          <label class="f"><span id="a-loc-label">Store at location</span><select id="a-loc" required></select></label>
           <label class="f">Tag prefix<input id="a-prefix" value="RZ" maxlength="10"></label>
           <label class="f">Units to create<input id="a-qty" type="number" min="1" max="50" value="1"></label>
           <label class="f">Audit every<select id="a-audit"><option value="1">1 month</option><option value="3" selected>3 months</option><option value="6">6 months</option><option value="12">12 months</option></select></label>
@@ -298,12 +306,12 @@ dialog h3{margin:0;font-size:17px}
         </div>
       </form>
 
-      <div class="card">
-        <h2>Categories <small>fix a spelling or merge two categories; every asset in it is updated</small></h2>
+      <div class="card admin-only">
+        <h2>Categories <small>pick one to fix its spelling or merge it into another; every asset in it is updated</small></h2>
         <div id="catTable"></div>
       </div>
 
-      <div class="card">
+      <div class="card admin-only">
         <h2>Import or export assets</h2>
         <p class="hint">Move stock between copies of the desk, or keep a backup. Export saves all locations and assets to a file. Import loads that file and skips anything already here.</p>
         <div class="row"><input type="file" id="impFile" accept=".json,application/json" style="flex:1 1 220px;width:auto"><button class="btn quiet" type="button" id="impBtn">Import file</button><button class="btn ghost" type="button" id="expBtn">Export data</button></div>
@@ -315,7 +323,7 @@ dialog h3{margin:0;font-size:17px}
         <div class="tools">
           <input type="search" id="a-search" placeholder="Search tag, name, serial, category">
           <select id="a-fstatus" aria-label="Filter by status">
-            <option value="">All statuses</option><option value="available">Available</option><option value="requested">Requested</option><option value="approved">Approved</option><option value="on_hold">On hold</option><option value="return_pending">Return pending</option><option value="inspect">Needs check</option><option value="missing">Missing</option><option value="retired">Retired</option>
+            <option value="">All statuses</option><option value="available">Available</option><option value="requested">Requested</option><option value="approved">Approved</option><option value="on_hold">On hold</option><option value="return_pending">Return pending</option><option value="inspect">Needs check</option><option value="in_transit">In transit</option><option value="missing">Missing</option><option value="retired">Retired</option>
           </select>
           <select id="a-floc" aria-label="Filter by location"></select>
         </div>
@@ -325,7 +333,7 @@ dialog h3{margin:0;font-size:17px}
 
     <!-- Locations -->
     <div class="panel" id="mp-locations" hidden>
-      <form class="card" id="locForm" autocomplete="off">
+      <form class="card admin-only" id="locForm" autocomplete="off">
         <h2>Create a location</h2>
         <p class="hint">Use a code your team will read off the shelf label, such as Zone-Rack-Shelf (A-01-03).</p>
         <div class="grid">
@@ -374,6 +382,38 @@ dialog h3{margin:0;font-size:17px}
       <div class="card"><h2>Recent audits</h2><div id="au-hist"></div></div>
     </div>
 
+    <!-- Transit -->
+    <div class="panel" id="mp-transit" hidden>
+      <div class="tiles" id="tr-tiles"></div>
+      <div class="card">
+        <h2>In transit from SG <small>samples on their way to KL, grouped by shipment</small></h2>
+        <div class="tools"><input type="search" id="tr-search" placeholder="Search tag, product or shipment"></div>
+        <div id="tr-list" class="panel"></div>
+      </div>
+      <div class="card"><h2>Recently received in KL</h2><div id="tr-recent"></div></div>
+    </div>
+
+    <!-- Activity log -->
+    <div class="panel" id="mp-log" hidden>
+      <div class="card">
+        <h2>Activity log <small>every action in the desk, newest first</small></h2>
+        <div class="tools">
+          <input type="search" id="lg-search" placeholder="Search tag, product, person or detail">
+          <select id="lg-action" aria-label="Action"></select>
+          <select id="lg-person" aria-label="Done by"></select>
+        </div>
+        <div class="tools">
+          <label class="row" style="gap:6px;font-size:13px;flex:1 1 160px">From<input type="date" id="lg-from" style="flex:1"></label>
+          <label class="row" style="gap:6px;font-size:13px;flex:1 1 160px">To<input type="date" id="lg-to" style="flex:1"></label>
+          <button class="btn quiet sm" type="button" id="lg-reset">Clear filters</button>
+          <button class="btn ghost sm" type="button" id="lg-csv">Download CSV</button>
+        </div>
+        <p class="hint" id="lg-count" style="margin:0"></p>
+        <div id="lg-table"></div>
+        <div class="row" style="justify-content:center"><button class="btn quiet" type="button" id="lg-more" hidden>Load older entries</button></div>
+      </div>
+    </div>
+
     <!-- Report -->
     <div class="panel" id="mp-report" hidden>
       <div class="row" style="justify-content:space-between">
@@ -387,7 +427,7 @@ dialog h3{margin:0;font-size:17px}
       </div>
       <div class="card"><h2>Overdue returns</h2><div id="r-overdue"></div></div>
       <div class="card"><h2>Recent movements</h2><div id="r-hist"></div></div>
-      <div class="card" id="exampleCard">
+      <div class="card admin-only" id="exampleCard">
         <h2>Example data</h2>
         <p class="hint" id="exHint"></p>
         <div class="row"><button class="btn quiet" type="button" id="exLoad">Load example stock</button><button class="btn danger" type="button" id="exClear">Remove example data</button></div>
@@ -435,7 +475,7 @@ dialog h3{margin:0;font-size:17px}
 (() => {
   const $ = s => document.querySelector(s);
   const esc = v => String(v ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
-  const STATUS = {available:"Available", requested:"Requested", approved:"Approved", on_hold:"On hold", return_pending:"Return pending", cancelled:"Cancelled – to restock", inspect:"Needs check", missing:"Missing", retired:"Retired"};
+  const STATUS = {available:"Available", requested:"Requested", approved:"Approved", on_hold:"On hold", return_pending:"Return pending", cancelled:"Cancelled – to restock", inspect:"Needs check", missing:"Missing", in_transit:"In transit from SG", retired:"Retired"};
   const OUT = ["requested","approved","on_hold","return_pending","cancelled"];
   const ymd = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
   const today = () => ymd(new Date());
@@ -456,7 +496,8 @@ dialog h3{margin:0;font-size:17px}
   const S = { assets:new Map(), locations:new Map(), accounts:new Map(), history:[], myLog:null };
   let seenAt = "";
   const DECISIONS = ["Approved","Rejected","Approval cancelled","Return approved","Return declined","Checked in by manager"];
-  let B = null, userNs = null, dl = null, me = null, myAcct = null, isMgr = false;
+  let B = null, userNs = null, dl = null, me = null, myAcct = null, isMgr = false, isAdmin = false, isPM = false;
+  function setRoleFlags(a){ isAdmin = !!a && a.role==="admin"; isPM = !!a && a.role==="pm"; isMgr = isAdmin || isPM; document.body.classList.toggle("pm-mode", isPM && !isAdmin); }
   const names = {};
   let view = "manager", mpanel = "assets";
   const store = { get(k){ try{ return sessionStorage.getItem(k) ?? localStorage.getItem(k); }catch(e){ return null; } },
@@ -545,9 +586,9 @@ dialog h3{margin:0;font-size:17px}
      ===================================================================== */
   /* Roles. Assistant Store Managers have the same access as the Store Manager
      (stored as role "admin" with title "assistant", so the Firebase rules need no change). */
-  const ROLE_LABEL = {manager:"Store manager", assistant:"Assistant Store Manager", staff:"Staff"};
-  const ROLE_FIELDS = {manager:{role:"admin", title:null}, assistant:{role:"admin", title:"assistant"}, staff:{role:"staff", title:null}};
-  const pickOf = a => a.role==="admin" ? (a.title==="assistant" ? "assistant" : "manager") : "staff";
+  const ROLE_LABEL = {manager:"Store manager", assistant:"Assistant Store Manager", pm:"Project manager", staff:"Staff"};
+  const ROLE_FIELDS = {manager:{role:"admin", title:null}, assistant:{role:"admin", title:"assistant"}, pm:{role:"pm", title:null}, staff:{role:"staff", title:null}};
+  const pickOf = a => a.role==="admin" ? (a.title==="assistant" ? "assistant" : "manager") : a.role==="pm" ? "pm" : "staff";
   const roleLabel = a => ROLE_LABEL[pickOf(a)];
   const storeManagers = () => [...S.accounts.values()].filter(a=>a.active && pickOf(a)==="manager");
   const pwProblem = p => p.length < 8 ? "Use at least 8 characters." : null;
@@ -738,7 +779,7 @@ dialog h3{margin:0;font-size:17px}
   function setPanel(p){
     mpanel = p;
     document.querySelectorAll("nav.sub button").forEach(b=>b.setAttribute("aria-selected", b.dataset.mp===p));
-    ["approvals","assets","locations","holds","audit","report","accounts"].forEach(k=>$("#mp-"+k).hidden = k!==p);
+    ["approvals","assets","transit","locations","holds","audit","report","log","accounts"].forEach(k=>$("#mp-"+k).hidden = k!==p);
     try{ if(me) localStorage.setItem("wms-panel-"+me,p); }catch(e){}
   }
   document.querySelectorAll("#viewSwitch button").forEach(b=>b.onclick=()=>setView(b.dataset.view));
@@ -777,13 +818,15 @@ dialog h3{margin:0;font-size:17px}
   }
   function renderCategories(){
     const counts = {}; assets().forEach(a=>{ const c = a.category || ""; counts[c] = (counts[c]||0)+1; });
-    const rows = categories().map(c=>`<tr><td><b>${esc(c)}</b></td><td class="num">${counts[c]}</td><td><button class="btn quiet sm" data-catren="${esc(c)}">Rename</button></td></tr>`);
-    if (counts[""]) rows.push(`<tr><td class="sub2">No category</td><td class="num">${counts[""]}</td><td class="sub2">Set it with Edit on each asset</td></tr>`);
-    $("#catTable").innerHTML = table(["Category","#Assets",""], rows, "No categories yet. They appear here once assets have one.");
+    const cats = categories(), box = $("#catTable"), prev = $("#catPick") ? $("#catPick").value : "";
+    if (!cats.length){ box.innerHTML = `<p class="hint" style="margin:0">No categories yet. They appear here once assets have one.</p>`; return; }
+    box.innerHTML = `<div class="tools"><select id="catPick" aria-label="Category" style="flex:1 1 240px;width:auto">${cats.map(c=>`<option value="${esc(c)}">${esc(c)} (${counts[c]} asset${counts[c]>1?"s":""})</option>`).join("")}</select><button class="btn quiet" type="button" data-catren="">Rename</button></div>${counts[""]?`<p class="hint" style="margin:0">${counts[""]} asset${counts[""]>1?"s have":" has"} no category. Set it with Edit on each asset.</p>`:""}`;
+    if (prev && cats.includes(prev)) $("#catPick").value = prev;
   }
   document.addEventListener("click", e => {
-    const b = e.target.closest("[data-catren]"); if (!b || !isMgr) return;
-    const old = b.dataset.catren, list = assets().filter(a=>a.category===old);
+    const b = e.target.closest("[data-catren]"); if (!b || !isAdmin) return;
+    const old = b.dataset.catren || ($("#catPick") && $("#catPick").value), list = assets().filter(a=>a.category===old);
+    if (!old) return;
     openDlg(`<h3>Rename category</h3>
       <p class="hint"><b>${esc(old)}</b> is used by ${list.length} asset${list.length>1?"s":""}. All of them will be updated.</p>
       <label class="f">New name<input id="d-catname" value="${esc(old)}" required></label>
@@ -817,6 +860,11 @@ dialog h3{margin:0;font-size:17px}
     $("#tagPreview").textContent = n===1 ? `Tag: ${t[0]}` : `Tags: ${t[0]} → ${t[n-1]}`;
   }
   ["#a-prefix","#a-qty"].forEach(s=>$(s).addEventListener("input",updatePreview));
+  $("#a-where").addEventListener("change", () => {
+    const sg = $("#a-where").value==="sg";
+    document.querySelectorAll("[data-transit]").forEach(el=>el.hidden=!sg);
+    $("#a-loc-label").textContent = sg ? "Shelf when it arrives in KL" : "Store at location";
+  });
 
   // ---------- create assets ----------
   $("#assetForm").addEventListener("submit", async e => {
@@ -828,11 +876,13 @@ dialog h3{margin:0;font-size:17px}
     if (serial && qty>1){ err.textContent="A serial number belongs to one unit. Set units to 1, or leave the serial blank."; err.hidden=false; return; }
     if (serial && assets().some(a=>a.serial===serial)){ err.textContent=`Serial ${serial} is already registered.`; err.hidden=false; return; }
     const tags = nextTags($("#a-prefix").value, qty);
-    const base = { name, category:readCat("a-cat"), model:$("#a-model").value.trim(), serial, accessories:$("#a-acc").value.trim(), notes:$("#a-notes").value.trim(), auditMonths:+$("#a-audit").value||3, locationId:loc, status:"available", holderId:null, holdSince:null, dueBack:null, purpose:"", createdAt:new Date().toISOString(), createdBy:me };
+    const where = $("#a-where").value, inTransit = where==="sg", shipRef = $("#a-ship").value.trim(), eta = $("#a-eta").value;
+    const base = { name, category:readCat("a-cat"), model:$("#a-model").value.trim(), serial, accessories:$("#a-acc").value.trim(), notes:$("#a-notes").value.trim(), auditMonths:+$("#a-audit").value||3, locationId:loc, status: inTransit ? "in_transit" : "available", holderId:null, holdSince:null, dueBack:null, purpose:"", createdAt:new Date().toISOString(), createdBy:me,
+      ...(inTransit ? {transitFrom:"SG", shipRef, eta:eta||null, dispatchedAt:new Date().toISOString(), dispatchedBy:me} : {}) };
     try{
       for (const tag of tags){ await put("assets", slug(tag), {...base, tag}); }
-      await log({action:"Created", tag: tags.length>1?`${tags[0]}…${tags.at(-1)}`:tags[0], name, note:`${qty} unit${qty>1?"s":""} at ${locCode(loc)}`});
-      toast(`Created ${qty} asset${qty>1?"s":""}: ${tags.length>1?tags[0]+" to "+tags.at(-1):tags[0]}`);
+      await log({action:"Created", tag: tags.length>1?`${tags[0]}…${tags.at(-1)}`:tags[0], name, note: inTransit ? `${qty} unit${qty>1?"s":""} in transit from SG${shipRef?` · shipment ${shipRef}`:""}${eta?` · ETA ${eta}`:""} · shelf on arrival ${locCode(loc)}` : `${qty} unit${qty>1?"s":""} at ${locCode(loc)}`});
+      toast(`Created ${qty} asset${qty>1?"s":""}: ${tags.length>1?tags[0]+" to "+tags.at(-1):tags[0]}${inTransit?" (in transit)":""}`);
       ["#a-name","#a-model","#a-serial","#a-acc","#a-notes"].forEach(s=>$(s).value=""); $("#a-qty").value=1; updatePreview();
     }catch(x){ failed(x); }
   });
@@ -1029,31 +1079,55 @@ dialog h3{margin:0;font-size:17px}
       }catch(x){ failed(x); }
     });
   }
+  // Lists what an edit changed, in words, for the activity log.
+  function editChanges(a, upd){
+    const out = [], short = v => { v = String(v ?? ""); return v ? (v.length > 40 ? v.slice(0,40)+"…" : v) : "(blank)"; };
+    const f = [["name","Name"],["model","Model"],["serial","Serial"],["category","Category"],["accessories","Accessories"]];
+    f.forEach(([k,l])=>{ if ((a[k]||"") !== (upd[k]||"")) out.push({key:k, text:`${l}: ${short(a[k])} → ${short(upd[k])}`}); });
+    if ((a.notes||"") !== (upd.notes||"")) out.push({key:"notes", text:"Notes updated"});
+    if (auditMonths(a) !== upd.auditMonths) out.push({key:"audit", text:`Audit every: ${auditMonths(a)} → ${upd.auditMonths} months`});
+    if ("shipRef" in upd && (a.shipRef||"") !== (upd.shipRef||"")) out.push({key:"ship", text:`Shipment: ${short(a.shipRef)} → ${short(upd.shipRef)}`});
+    if ("eta" in upd && (a.eta||"") !== (upd.eta||"")) out.push({key:"eta", text:`Expected arrival: ${short(a.eta)} → ${short(upd.eta)}`});
+    if (upd.locationId !== a.locationId) out.push({key:"location", text:`Location: ${locCode(a.locationId)} → ${locCode(upd.locationId)}`});
+    if (upd.status && upd.status !== a.status) out.push({key:"status", text:`Status: ${STATUS[a.status]} → ${STATUS[upd.status]}`});
+    return out;
+  }
   function manageAsset(id){
     const a=S.assets.get(id); if(!a) return;
-    const held = OUT.includes(a.status);
+    const transit = a.status==="in_transit", held = OUT.includes(a.status) || transit, canStatus = isAdmin && !held, canLoc = isAdmin || transit;
     openDlg(`<h3>${esc(a.tag)} · ${esc(a.name)}</h3>
       <div class="grid">
-        <label class="f">Status<select id="d-st" ${held?"disabled":""}>${["available","inspect","missing","retired"].map(s=>`<option value="${s}" ${a.status===s?"selected":""}>${STATUS[s]}</option>`).join("")}${held?`<option selected>${STATUS[a.status]}</option>`:""}</select></label>
-        <label class="f">Location<select id="d-loc">${locs().map(l=>`<option value="${esc(l.id)}" ${l.id===a.locationId?"selected":""}>${esc(l.code)}</option>`).join("")}</select></label>
+        <label class="f" style="grid-column:1/-1">Product name<input id="d-name" value="${esc(a.name)}" required></label>
+        <label class="f">Model / SKU<input id="d-model" value="${esc(a.model||"")}"></label>
+        <label class="f">Status<select id="d-st" ${canStatus?"":"disabled"}>${["available","inspect","missing","retired"].map(s=>`<option value="${s}" ${a.status===s?"selected":""}>${STATUS[s]}</option>`).join("")}${held||!canStatus&&!["available","inspect","missing","retired"].includes(a.status)?`<option selected>${STATUS[a.status]}</option>`:""}</select></label>
+        <label class="f">${transit?"Shelf on arrival":"Location"}<select id="d-loc" ${canLoc?"":"disabled"}>${locs().map(l=>`<option value="${esc(l.id)}" ${l.id===a.locationId?"selected":""}>${esc(l.code)}</option>`).join("")}</select></label>
         <label class="f">Serial number<input id="d-serial" value="${esc(a.serial)}"></label>
         <label class="f">Category${catSelectHtml("d-cat", a.category||"")}</label>
         <label class="f">Audit every<select id="d-aud">${[1,3,6,12].map(m=>`<option value="${m}" ${auditMonths(a)===m?"selected":""}>${m} month${m>1?"s":""}</option>`).join("")}</select></label>
       </div>
+      ${transit?`<div class="grid"><label class="f">Shipment / DO reference<input id="d-ship" value="${esc(a.shipRef||"")}"></label><label class="f">Expected arrival<input type="date" id="d-eta" value="${esc(a.eta||"")}"></label></div>`:""}
       <label class="f">Accessories<input id="d-acc" value="${esc(a.accessories||"")}" placeholder="e.g. USB-C cable, wrist rest, carry pouch"></label>
       <label class="f">Notes / specs<textarea id="d-notes">${esc(a.notes||"")}</textarea></label>
-      ${held?`<p class="hint">${STATUS[a.status]} for ${esc(holderName(a.holderId))}. ${a.status==="on_hold"?"Use “Check in” on the Who has what tab to release it.":"Deal with it on the Approvals tab."}</p>`:""}
-      <div class="row" style="justify-content:space-between"><button class="btn danger" value="delete" type="button" id="d-del">Delete asset</button>${dlgBtns("Save changes").replace('<div class="row end">','<div class="row">')}</div>`, async () => {
-      const upd = {locationId:$("#d-loc").value, serial:$("#d-serial").value.trim(), category:readCat("d-cat"), accessories:$("#d-acc").value.trim(), notes:$("#d-notes").value.trim(), auditMonths:+$("#d-aud").value||3};
-      if (!held) upd.status = $("#d-st").value;
+      ${transit?`<p class="hint">In transit from SG. A store manager receives it on the <b>Transit</b> tab.</p>`:""}
+      ${held&&!transit?`<p class="hint">${STATUS[a.status]} for ${esc(holderName(a.holderId))}. ${a.status==="on_hold"?"Use “Check in” on the Who has what tab to release it.":"Deal with it on the Approvals tab."}</p>`:""}
+      <p class="hint" style="margin:0"><button type="button" class="linkbtn" id="d-hist">View this asset's history</button></p>
+      <div class="row" style="justify-content:space-between">${isAdmin?`<button class="btn danger" value="delete" type="button" id="d-del">Delete asset</button>`:"<span></span>"}${dlgBtns("Save changes").replace('<div class="row end">','<div class="row">')}</div>`, async () => {
+      const newName = $("#d-name").value.trim().replace(/\s+/g," ");
+      if (!newName){ toast("Enter a product name."); return false; }
+      const upd = {name:newName, model:$("#d-model").value.trim(), locationId:canLoc ? $("#d-loc").value : a.locationId, serial:$("#d-serial").value.trim(), category:readCat("d-cat"), accessories:$("#d-acc").value.trim(), notes:$("#d-notes").value.trim(), auditMonths:+$("#d-aud").value||3};
+      if (canStatus) upd.status = $("#d-st").value;
+      if (transit){ upd.shipRef = $("#d-ship").value.trim(); upd.eta = $("#d-eta").value || null; }
       try{
+        const changes = editChanges(a, upd);
+        if (!changes.length){ toast("Nothing changed."); return; }
         await patch("assets", id, upd);
-        const moved = upd.locationId!==a.locationId, st = upd.status && upd.status!==a.status;
-        if (moved||st) await log({action: moved?"Moved":"Status changed", tag:a.tag, name:a.name, note:[moved?`${locCode(a.locationId)} → ${locCode(upd.locationId)}`:"", st?STATUS[upd.status]:""].filter(Boolean).join(" · "), assetId:id});
+        const only = changes.length===1 ? changes[0].key : "";
+        await log({action: only==="location" ? "Moved" : only==="status" ? "Status changed" : "Edited", tag:a.tag, name:upd.name, note:changes.map(c=>c.text).join("; "), assetId:id});
         toast(`${a.tag} updated`);
       }catch(x){ failed(x); }
     });
-    $("#d-del").onclick = () => {
+    $("#d-hist").onclick = () => { dlg.close(); showLogFor(a.tag); };
+    if ($("#d-del")) $("#d-del").onclick = () => {
       if (held){ toast("Release the asset (check in or reject the request) before deleting it."); return; }
       const b=$("#d-del");
       if (b.dataset.armed){ dlg.close(); del("assets",id).then(()=>{ log({action:"Deleted", tag:a.tag, name:a.name, note:""}); toast(`${a.tag} deleted`); }).catch(failed); }
@@ -1103,7 +1177,7 @@ dialog h3{margin:0;font-size:17px}
       const here=all.filter(a=>a.locationId===l.id);
       return `<tr><td><span class="bin">${esc(l.code)}</span></td><td>${esc(l.type)}</td><td>${esc(l.zone||"–")}</td><td>${esc(l.description||"–")}</td>
       <td class="num">${here.length}</td><td class="num">${here.filter(a=>a.status==="available").length}</td><td class="num">${here.filter(a=>a.status==="on_hold").length}</td>
-      <td><button class="btn quiet sm" data-act="delloc" data-id="${esc(l.id)}">Delete</button></td></tr>`;
+      <td>${isAdmin?`<button class="btn quiet sm" data-act="delloc" data-id="${esc(l.id)}">Delete</button>`:""}</td></tr>`;
     }), "No locations yet. Create shelves, racks or bins above, then assign assets to them.");
   }
   const HELD = ["approved","on_hold","return_pending"];
@@ -1128,7 +1202,7 @@ dialog h3{margin:0;font-size:17px}
         <td class="tag">${esc(a.tag)}</td><td>${esc(a.name)}${a.accessories?`<div class="sub2">With: ${esc(a.accessories)}</div>`:""}</td><td>${label(a)}</td>
         <td style="white-space:nowrap">${a.status==="approved"?`<span class="sub2">Approved ${fmtDate(a.approvedAt)}</span>`:fmtDate(a.holdSince)}</td>
         <td style="white-space:nowrap">${fmtDate(a.dueBack)}</td><td class="sub2">${esc(a.purpose||"–")}</td>
-        <td>${a.status==="approved"?"":`<button class="btn quiet sm" data-act="checkin" data-id="${esc(a.id)}">Check in</button>`}</td></tr>`).join("")}</tbody></table></div></div>`;
+        <td>${a.status==="approved"||!isAdmin?"":`<button class="btn quiet sm" data-act="checkin" data-id="${esc(a.id)}">Check in</button>`}</td></tr>`).join("")}</tbody></table></div></div>`;
     }).join("") : `<div class="empty">${all.length ? "No items match these filters." : "Nobody is holding any assets right now. Items appear here once a request is approved."}</div>`;
   }
   function renderApprovals(){
@@ -1175,13 +1249,72 @@ dialog h3{margin:0;font-size:17px}
       return `<tr><td>${labelFn(k,true)}</td><td class="num">${g.length}</td><td class="num">${av}</td><td class="num">${oh}</td><td style="width:30%">${stackBar(av,oh,g.length-av-oh,g.length)}</td></tr>`;
     });
   }
+  // ---------- transit (SG → KL) ----------
+  const RECV = {ok:"Received – all OK", issue:"Received – damaged or parts missing", missing:"Not in the shipment"};
+  const shelfSelect = (id, sel, extra) => `<select id="${id}">${extra||""}${locs().map(l=>`<option value="${esc(l.id)}" ${l.id===sel?"selected":""}>${esc(l.code)}${l.zone?" · "+esc(l.zone):""}</option>`).join("")}</select>`;
+  function renderTransit(){
+    const all = assets().filter(a=>a.status==="in_transit");
+    const late = all.filter(a=>a.eta && a.eta < today()), since = addDays(-30);
+    const recent = S.history.filter(h=>h.action==="Received in KL");
+    const ships = new Set(all.map(a=>a.shipRef||""));
+    $("#tr-tiles").innerHTML = [["In transit",all.length],["Shipments",ships.size],["Past expected arrival",late.length,late.length>0],["Received in last 30 days",recent.filter(h=>h.at && ymd(new Date(h.at))>=since).length]]
+      .map(([l,v,al])=>`<div class="tile${al?" alert":""}"><b>${v}</b><span>${l}</span></div>`).join("");
+    const q = $("#tr-search").value.trim().toLowerCase();
+    const list = all.filter(a=>!q || [a.tag,a.name,a.shipRef,a.category].some(v=>String(v||"").toLowerCase().includes(q)));
+    const groups = {}; list.forEach(a=>(groups[a.shipRef||""]=groups[a.shipRef||""]||[]).push(a));
+    const keys = Object.keys(groups).sort((x,y)=>{ const ex=groups[x][0].eta||"9999", ey=groups[y][0].eta||"9999"; return ex.localeCompare(ey) || x.localeCompare(y); });
+    $("#tr-list").innerHTML = keys.length ? keys.map(k=>{
+      const g = groups[k].sort((x,y)=>x.tag.localeCompare(y.tag,undefined,{numeric:true})), eta = g.map(a=>a.eta).filter(Boolean).sort()[0], isLate = eta && eta < today();
+      return `<div class="holder"><div class="holder-h"><span><strong>${k?`Shipment ${esc(k)}`:"No shipment reference"}</strong> <span class="sub2">${g.length} item${g.length>1?"s":""} · sent ${fmtDate(g[0].dispatchedAt||g[0].createdAt)} by ${esc(holderName(g[0].dispatchedBy||g[0].createdBy))}</span></span>
+        <span class="row" style="gap:8px">${eta?`<span class="pill ${isLate?"s-overdue":"s-in_transit"}">${isLate?"Late · was due":"Arriving"} ${fmtDate(eta)}</span>`:'<span class="sub2">No arrival date</span>'}${isAdmin?`<button class="btn sm" data-recvall="${esc(k)}">Receive all ${g.length}</button>`:""}</span></div>
+      <div style="overflow-x:auto"><table><thead><tr><th>Tag</th><th>Product</th><th>Category</th><th>Shelf on arrival</th><th></th></tr></thead><tbody>${g.map(a=>`<tr>
+        <td class="tag">${esc(a.tag)}</td><td>${esc(a.name)}${a.accessories?`<div class="sub2">With: ${esc(a.accessories)}</div>`:""}</td><td>${esc(a.category||"–")}</td>
+        <td><span class="bin">${esc(locCode(a.locationId))}</span></td>
+        <td>${isAdmin?`<button class="btn quiet sm" data-recv="${esc(a.id)}">Receive</button>`:""}</td></tr>`).join("")}</tbody></table></div></div>`;
+    }).join("") : `<div class="empty">${all.length ? "No shipments match this search." : "Nothing in transit. Assets created as “In SG – shipping to KL” appear here until a store manager receives them."}</div>`;
+    $("#tr-recent").innerHTML = table(["Received","Item","Result","By"], recent.slice(0,15).map(h=>`<tr><td style="white-space:nowrap">${fmtDT(h.at)}</td><td><span class="tag">${esc(h.tag)}</span> <span class="sub2">${esc(h.name||"")}</span></td><td class="sub2">${esc(h.note||"")}</td><td>${esc(holderName(h.userId))}</td></tr>`), "Nothing received yet.");
+  }
+  $("#tr-search").addEventListener("input", renderTransit);
+  async function receiveOne(a, res, loc, note){
+    const st = res==="ok" ? "available" : res==="issue" ? "inspect" : "missing";
+    await patch("assets", a.id, {status:st, locationId:loc||a.locationId, receivedAt:new Date().toISOString(), receivedBy:me, receiveResult:res, receiveNote:note||""});
+    await log({action:"Received in KL", tag:a.tag, name:a.name, note:`${RECV[res]}${res!=="missing"?` → ${locCode(loc||a.locationId)}`:""}${a.shipRef?` · shipment ${a.shipRef}`:""}${note?" · "+note:""}`, assetId:a.id});
+  }
+  document.addEventListener("click", e => {
+    const one = e.target.closest("[data-recv]"), all = e.target.closest("[data-recvall]");
+    if ((!one && !all) || !isAdmin) return;
+    if (one){
+      const a = S.assets.get(one.dataset.recv); if (!a || a.status!=="in_transit") return;
+      openDlg(`<h3>Receive ${esc(a.tag)} · ${esc(a.name)}</h3>
+        <p class="hint">${a.shipRef?`Shipment ${esc(a.shipRef)} · `:""}sent ${fmtDate(a.dispatchedAt||a.createdAt)} by ${esc(holderName(a.dispatchedBy||a.createdBy))}</p>
+        ${accBox(a, "Check these arrived too")}
+        <label class="f">Result<select id="d-res">${Object.entries(RECV).map(([k,v])=>`<option value="${k}">${v}</option>`).join("")}</select></label>
+        <label class="f">Put on shelf${shelfSelect("d-loc", a.locationId)}</label>
+        <label class="f">Note<input id="d-note" placeholder="Optional, e.g. box damaged, charger missing"></label>
+        ${dlgBtns("Confirm receipt")}`, async () => {
+        try{ const r = $("#d-res").value; await receiveOne(a, r, $("#d-loc").value, $("#d-note").value.trim()); toast(`${a.tag} ${r==="missing"?"marked missing":"received"}`); }catch(x){ failed(x); }
+      });
+    } else {
+      const ref = all.dataset.recvall, g = assets().filter(a=>a.status==="in_transit" && (a.shipRef||"")===ref);
+      if (!g.length) return;
+      openDlg(`<h3>Receive ${ref?`shipment ${esc(ref)}`:"items with no shipment reference"}</h3>
+        <p class="hint">Marks all ${g.length} item${g.length>1?"s":""} as received and OK. If anything is damaged or missing, receive that item on its own first.</p>
+        <label class="f">Put on shelf${shelfSelect("d-loc", "", `<option value="">Each item's planned shelf</option>`)}</label>
+        <label class="f">Note<input id="d-note" placeholder="Optional"></label>
+        ${dlgBtns(`Receive ${g.length} item${g.length>1?"s":""}`)}`, async () => {
+        const loc = $("#d-loc").value, note = $("#d-note").value.trim();
+        try{ for (const a of g) await receiveOne(a, "ok", loc || a.locationId, note); toast(`${g.length} item${g.length>1?"s":""} received`); }catch(x){ failed(x); }
+      });
+    }
+  });
+
   // ---------- audits ----------
   const AUDIT_DEFAULT = 3, AUDIT_SOON_DAYS = 14;
   const RESULT = {ok:"Found – OK", issue:"Found – needs check", missing:"Missing"};
   function addMonths(iso, n){ const d = new Date(iso), day = d.getDate(); d.setDate(1); d.setMonth(d.getMonth()+n); const last = new Date(d.getFullYear(), d.getMonth()+1, 0).getDate(); d.setDate(Math.min(day, last)); return ymd(d); }
   const auditMonths = a => +a.auditMonths || AUDIT_DEFAULT;
-  const auditDue = a => addMonths(a.lastAuditAt || a.createdAt || new Date().toISOString(), auditMonths(a));
-  function auditState(a){ if (a.status==="retired") return "off"; const due = auditDue(a); if (due < today()) return "overdue"; if (due <= addDays(AUDIT_SOON_DAYS)) return "soon"; return "ok"; }
+  const auditDue = a => addMonths(a.lastAuditAt || a.receivedAt || a.createdAt || new Date().toISOString(), auditMonths(a));
+  function auditState(a){ if (a.status==="retired" || a.status==="in_transit") return "off"; const due = auditDue(a); if (due < today()) return "overdue"; if (due <= addDays(AUDIT_SOON_DAYS)) return "soon"; return "ok"; }
   const AUDIT_PILL = {overdue:'<span class="pill s-overdue">Overdue</span>', soon:'<span class="pill s-requested">Due soon</span>', ok:'<span class="pill s-available">On schedule</span>', off:'<span class="pill s-retired">Not audited</span>'};
   function auditCounts(){
     const c = {overdue:0, soon:0, ok:0, done90:0}, since = addDays(-90);
@@ -1242,7 +1375,7 @@ dialog h3{margin:0;font-size:17px}
     finally{ btn.disabled = false; renderAudit(); }
   };
   document.addEventListener("click", e => {
-    const b = e.target.closest("[data-audit]"); if (!b || !isMgr) return;
+    const b = e.target.closest("[data-audit]"); if (!b || !isAdmin) return;
     const a = S.assets.get(b.dataset.audit); if (!a) return;
     const held = OUT.includes(a.status);
     openDlg(`<h3>Audit ${esc(a.tag)} · ${esc(a.name)}</h3>
@@ -1261,7 +1394,7 @@ dialog h3{margin:0;font-size:17px}
   function renderReport(){
     const c=stats();
     $("#r-stamp").textContent = `Generated ${fmtDT(new Date().toISOString())} · ${S.locations.size} locations`;
-    const tiles=[["Total assets",c.total],["Available",c.available],["Pending approval",c.requested,c.requested>0],["Awaiting pickup",c.approved],["Returns to inspect",c.return_pending,c.return_pending>0],["On hold",c.on_hold],["Overdue",c.overdue,c.overdue>0],["Needs check",c.inspect],["Missing",c.missing||0,(c.missing||0)>0],["Audits overdue",auditCounts().overdue,auditCounts().overdue>0],["Retired",c.retired]];
+    const tiles=[["Total assets",c.total],["Available",c.available],["In transit",c.in_transit||0],["Pending approval",c.requested,c.requested>0],["Awaiting pickup",c.approved],["Returns to inspect",c.return_pending,c.return_pending>0],["On hold",c.on_hold],["Overdue",c.overdue,c.overdue>0],["Needs check",c.inspect],["Missing",c.missing||0,(c.missing||0)>0],["Audits overdue",auditCounts().overdue,auditCounts().overdue>0],["Retired",c.retired]];
     $("#r-tiles").innerHTML = tiles.map(([l,v,al])=>`<div class="tile${al?" alert":""}"><b>${v}</b><span>${l}</span></div>`).join("");
     const H=["Location","#Total","#Avail.","#On hold",""];
     $("#r-loc").innerHTML = table(H, groupRows(a=>a.locationId, (k,html)=>html?`<span class="bin">${esc(locCode(k))}</span>`:locCode(k)), "No stock recorded yet.");
@@ -1329,6 +1462,7 @@ dialog h3{margin:0;font-size:17px}
     renderCatPicker(); if (isMgr) renderCategories();
     fillSelect("#u-fcat", cats.map(c=>({v:c,t:c})), "All categories");
     $("#n-assets").textContent = S.assets.size; $("#n-locations").textContent = S.locations.size;
+    const trAll = assets().filter(a=>a.status==="in_transit"); $("#n-transit").textContent = trAll.length; $("#n-transit").classList.toggle("hot", trAll.some(a=>a.eta && a.eta < today()));
     $("#n-holds").textContent = new Set(assets().filter(a=>["approved","on_hold","return_pending"].includes(a.status) && a.holderId).map(a=>a.holderId)).size;
     const auc = auditCounts(); $("#n-audit").textContent = auc.overdue + auc.soon; $("#n-audit").classList.toggle("hot", auc.overdue>0);
     const np = assets().filter(a=>a.status==="requested"||a.status==="return_pending"||a.status==="cancelled").length;
@@ -1336,7 +1470,7 @@ dialog h3{margin:0;font-size:17px}
     updatePreview();
     $("#n-accounts").textContent = [...S.accounts.values()].filter(a=>a.active).length;
     if (!me) return;
-    if (isMgr){ renderApprovals(); renderAssets(); renderLocations(); renderHolds(); renderAudit(); renderReport(); renderAccounts(); }
+    if (isMgr){ renderApprovals(); renderAssets(); renderTransit(); renderLocations(); renderHolds(); renderAudit(); renderReport(); renderLog(); renderAccounts(); }
     renderUser();
     resolveNames();
   }
@@ -1438,11 +1572,11 @@ dialog h3{margin:0;font-size:17px}
     finally{ btn.disabled = false; }
   });
   function renderAccounts(){
-    const list = [...S.accounts.values()].filter(a=>!a.deleted).sort((a,b)=>(!a.active)-(!b.active) || ["manager","assistant","staff"].indexOf(pickOf(a))-["manager","assistant","staff"].indexOf(pickOf(b)) || (a.name||"").localeCompare(b.name||""));
+    const list = [...S.accounts.values()].filter(a=>!a.deleted).sort((a,b)=>(!a.active)-(!b.active) || ["manager","assistant","pm","staff"].indexOf(pickOf(a))-["manager","assistant","pm","staff"].indexOf(pickOf(b)) || (a.name||"").localeCompare(b.name||""));
     $("#accTable").innerHTML = table(["Name",A.loginLabel,"Role","Status","Last login",""], list.map(a=>{
       const self = a.id===me, off = !a.active;
       return `<tr><td><b>${esc(a.name)}</b>${self?' <span class="sub2">(you)</span>':""}</td><td class="tag">${esc(a.login)}</td>
-      <td><span class="pill role-${pickOf(a)==="assistant"?"assistant":a.role}">${roleLabel(a)}</span></td>
+      <td><span class="pill role-${pickOf(a)==="assistant"?"assistant":pickOf(a)==="pm"?"pm":a.role}">${roleLabel(a)}</span></td>
       <td>${off?'<span class="pill s-retired">Disabled</span>':a.mustChange?'<span class="pill s-requested">Not logged in yet</span>':'<span class="pill s-available">Active</span>'}</td>
       <td>${fmtDT(a.lastLoginAt)}</td>
       <td><div class="row" style="flex-wrap:nowrap;gap:6px">
@@ -1454,7 +1588,7 @@ dialog h3{margin:0;font-size:17px}
     }), "No accounts yet.");
   }
   document.addEventListener("click", e => {
-    const b = e.target.closest("[data-acc]"); if (!b || !isMgr) return;
+    const b = e.target.closest("[data-acc]"); if (!b || !isAdmin) return;
     const a = S.accounts.get(b.dataset.id); if (!a) return;
     const act = b.dataset.acc;
     if (act==="reset"){
@@ -1472,8 +1606,8 @@ dialog h3{margin:0;font-size:17px}
     } else if (act==="role"){
       const cur = pickOf(a);
       openDlg(`<h3>Change role for ${esc(a.name)}</h3>
-        <p class="hint">Currently: <b>${ROLE_LABEL[cur]}</b>. Store managers and assistant store managers have full access, including approvals, stock and user accounts. Staff can only request and return assets.</p>
-        <label class="f">New role<select id="d-role">${["staff","assistant","manager"].map(k=>`<option value="${k}" ${k===cur?"selected":""}>${ROLE_LABEL[k]}</option>`).join("")}</select></label>
+        <p class="hint">Currently: <b>${ROLE_LABEL[cur]}</b>. Store managers and assistant store managers have full access, including approvals, stock and user accounts. Project managers create and edit assets and track shipments, but can't approve loans, receive shipments or manage accounts. Staff can only request and return assets.</p>
+        <label class="f">New role<select id="d-role">${["staff","pm","assistant","manager"].map(k=>`<option value="${k}" ${k===cur?"selected":""}>${ROLE_LABEL[k]}</option>`).join("")}</select></label>
         ${dlgBtns("Change role")}`, async()=>{
         const pick = $("#d-role").value;
         if (pick===cur) return;
@@ -1587,9 +1721,53 @@ dialog h3{margin:0;font-size:17px}
   // ---------- session ----------
   let subs = [], histUnsub = null;
   const onErr = e => { if (e && e.code==="revoked"){ $("#banner").hidden=false; $("#banner").textContent="Your access to this desk has changed. Reload to continue."; } };
+  let histLimit = 300;
   function watchAllHistory(){
     if (!isMgr || histUnsub) return;
-    histUnsub = B.watch("history", {orderBy:["at","desc"], limit:150}, r=>{ S.history = r; if (me && isMgr) renderReport(); resolveNames(); }, onErr);
+    histUnsub = B.watch("history", {orderBy:["at","desc"], limit:histLimit}, r=>{ S.history = r; if (me && isMgr){ renderReport(); renderLog(); renderAudit(); renderTransit(); } resolveNames(); }, onErr);
+  }
+  function loadMoreHistory(){ if (histUnsub){ try{ histUnsub(); }catch(e){} histUnsub = null; } histLimit += 300; watchAllHistory(); }
+
+  // ---------- activity log ----------
+  const LOG_PAGE = 100; let logShown = LOG_PAGE;
+  function logRows(){
+    const q = $("#lg-search").value.trim().toLowerCase(), act = $("#lg-action").value, who = $("#lg-person").value, from = $("#lg-from").value, to = $("#lg-to").value;
+    return S.history.filter(h=>{
+      const d = h.at ? ymd(new Date(h.at)) : "";
+      if (act && h.action!==act) return false;
+      if (who && h.userId!==who && h.requesterId!==who) return false;
+      if (from && d < from) return false;
+      if (to && d > to) return false;
+      return !q || [h.tag, h.name, h.note, h.action, holderName(h.userId), holderName(h.requesterId)].some(v=>String(v||"").toLowerCase().includes(q));
+    });
+  }
+  function renderLog(){
+    if (!isMgr) return;
+    const acts = [...new Set(S.history.map(h=>h.action).filter(Boolean))].sort();
+    fillSelect("#lg-action", acts.map(a=>({v:a, t:a})), "All actions");
+    const ppl = [...new Set(S.history.flatMap(h=>[h.userId, h.requesterId]).filter(Boolean))].sort((x,y)=>holderName(x).localeCompare(holderName(y)));
+    fillSelect("#lg-person", ppl.map(id=>({v:id, t:holderName(id)})), "Anyone");
+    const rows = logRows(), shown = rows.slice(0, logShown);
+    $("#lg-count").textContent = `${rows.length} entr${rows.length===1?"y":"ies"}${rows.length!==S.history.length?` match your filters (of ${S.history.length} loaded)`:""}${rows.length>shown.length?`, showing the newest ${shown.length}`:""}.`;
+    $("#lg-table").innerHTML = table(["When","Action","Item","By","For","Detail"], shown.map(h=>`<tr>
+      <td style="white-space:nowrap">${fmtDT(h.at)}</td><td><b>${esc(h.action||"")}</b></td>
+      <td><span class="tag">${esc(h.tag||"")}</span>${h.name?`<div class="sub2">${esc(h.name)}</div>`:""}</td>
+      <td>${esc(holderName(h.userId))}</td><td>${h.requesterId && h.requesterId!==h.userId ? esc(holderName(h.requesterId)) : "–"}</td>
+      <td class="sub2" style="max-width:44ch">${esc(h.note||"")}</td></tr>`), "No activity matches these filters.");
+    $("#lg-more").hidden = !(rows.length > shown.length || S.history.length >= histLimit);
+  }
+  ["#lg-search","#lg-action","#lg-person","#lg-from","#lg-to"].forEach(s=>$(s).addEventListener("input", ()=>{ logShown = LOG_PAGE; renderLog(); }));
+  $("#lg-reset").onclick = () => { ["#lg-search","#lg-action","#lg-person","#lg-from","#lg-to"].forEach(s=>$(s).value=""); logShown = LOG_PAGE; renderLog(); };
+  $("#lg-more").onclick = () => { if (logRows().length > logShown){ logShown += LOG_PAGE; renderLog(); } else loadMoreHistory(); };
+  $("#lg-csv").onclick = async () => {
+    const cell = v => { v = String(v ?? ""); return /[",\n]/.test(v) ? `"${v.replace(/"/g,'""')}"` : v; };
+    const lines = [["When","Action","Tag","Product","By","For","Detail"]].concat(logRows().map(h=>[h.at ? new Date(h.at).toLocaleString() : "", h.action, h.tag, h.name, realName(h.userId), h.requesterId && h.requesterId!==h.userId ? realName(h.requesterId) : "", h.note]));
+    if (await saveFile(`activity-log-${today()}.csv`, lines.map(r=>r.map(cell).join(",")).join("\n"), "text/csv")) toast("Activity log saved");
+  };
+  const realName = id => { if (!id) return ""; const a = S.accounts.get(id); return a ? (a.name || a.login) : (id===me && myAcct ? myAcct.name : holderName(id)); };
+  function showLogFor(text){
+    ["#lg-action","#lg-person","#lg-from","#lg-to"].forEach(s=>$(s).value=""); $("#lg-search").value = text; logShown = LOG_PAGE;
+    setView("manager"); setPanel("log"); renderLog(); window.scrollTo({top:0, behavior:"smooth"});
   }
   function stopAll(){
     subs.forEach(u=>{ try{ u(); }catch(e){} }); subs = [];
@@ -1602,7 +1780,7 @@ dialog h3{margin:0;font-size:17px}
   }
   function enterApp(acct){
     stopAll();
-    me = acct.id; myAcct = acct; isMgr = acct.role==="admin";
+    me = acct.id; myAcct = acct; setRoleFlags(acct);
     try{ seenAt = localStorage.getItem("wms-seen-"+me) || ""; }catch(e){ seenAt = ""; }
     patch(A.coll, me, {lastLoginAt:new Date().toISOString()}).catch(()=>{});
     S.myLog = null;
@@ -1616,7 +1794,7 @@ dialog h3{margin:0;font-size:17px}
   }
   function leaveApp(){
     stopAll();
-    me = null; myAcct = null; isMgr = false; S.myLog = null; S.history = []; S.accounts = new Map();
+    me = null; myAcct = null; setRoleFlags(null); S.myLog = null; S.history = []; S.accounts = new Map();
     $("#who").textContent = "Logged out";
   }
   function showApp(){
@@ -1629,7 +1807,7 @@ dialog h3{margin:0;font-size:17px}
     const a = S.accounts.get(me);
     if (!a || !a.active){ A.logout("Your account has been disabled. Ask the store manager."); return; }
     const roleChanged = pickOf(a) !== pickOf(myAcct);
-    myAcct = {...myAcct, ...a}; isMgr = a.role==="admin";
+    myAcct = {...myAcct, ...a}; setRoleFlags(a);
     if (roleChanged){ watchAllHistory(); if (!$("#app").hidden){ showApp(); toast(`Your role is now ${roleLabel(a)}`); } }
   }
   $("#btnLogout").onclick = async () => { await A.logout(); toast("Logged out"); };
@@ -1651,7 +1829,7 @@ dialog h3{margin:0;font-size:17px}
   function applyRole(){
     $("#viewSwitch").hidden = !isMgr;
     let v="manager", p="assets"; try{ v=localStorage.getItem("wms-view-"+me)||v; p=localStorage.getItem("wms-panel-"+me)||p; }catch(e){}
-    if (p==="accounts" && !isMgr) p="assets";
+    if (!isAdmin && ["approvals","audit","accounts"].includes(p)) p="assets";
     setPanel(p); setView(isMgr ? v : "user");
   }
   function applyLabels(){
