@@ -1165,8 +1165,9 @@ dialog h3{margin:0;font-size:17px}
   function renderAssets(){
     const q=$("#a-search").value.trim(), fs=$("#a-fstatus").value, fl=$("#a-floc").value;
     const list = assets().filter(a=>match(a,q) && (!fs||a.status===fs) && (!fl||a.locationId===fl)).sort((x,y)=>x.tag.localeCompare(y.tag,undefined,{numeric:true}));
-    $("#assetTable").innerHTML = table(["Tag","Product","Category","Serial","Accessories","Location","Status","Holder",""], list.map(a=>`<tr>
-      <td class="tag">${esc(a.tag)}</td><td>${esc(a.name)}${a.model?`<div class="sub2">${esc(a.model)}</div>`:""}${notesLine(a)}</td>
+    $("#assetTable").innerHTML = table(["Tag","Product","Model / SKU","Category","Serial","Accessories","Location","Status","Holder",""], list.map(a=>`<tr>
+      <td class="tag">${esc(a.tag)}</td><td>${esc(a.name)}${notesLine(a)}</td>
+      <td style="white-space:nowrap">${esc(a.model||"–")}</td>
       <td>${esc(a.category||"–")}</td><td class="tag" style="font-weight:500">${esc(a.serial||"–")}</td>
       <td class="sub2" style="max-width:24ch">${esc(a.accessories||"–")}</td>
       <td><span class="bin">${esc(locCode(a.locationId))}</span></td><td>${pill(a)}</td>
