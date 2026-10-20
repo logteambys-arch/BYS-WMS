@@ -509,6 +509,7 @@ dialog h3{margin:0;font-size:17px}
   const fmtDT = iso => iso ? new Date(iso).toLocaleString(undefined,{day:"2-digit",month:"short",hour:"2-digit",minute:"2-digit"}) : "–";
   const rid = p => p + "_" + Date.now().toString(36) + Math.random().toString(36).slice(2,7);
   const slug = s => String(s).trim().replace(/[^A-Za-z0-9_\-.~:@+]/g,"_").slice(0,120) || rid("x");
+  const newLocId = (code, taken) => { const b=slug(code); let id=b, i=2; while (S.locations.has(id) || (taken&&taken.has(id))) id=`${b}~${i++}`; return id; };
 
   const S = { assets:new Map(), locations:new Map(), accounts:new Map(), history:[], myLog:null };
   let seenAt = "";
@@ -912,7 +913,7 @@ dialog h3{margin:0;font-size:17px}
     if (!code){ err.textContent="Enter a location code."; err.hidden=false; return; }
     if (locs().some(l=>l.code===code)){ err.textContent=`${code} already exists.`; err.hidden=false; return; }
     try{
-      await put("locations", slug(code), {code, type:$("#l-type").value, zone:$("#l-zone").value.trim(), description:$("#l-desc").value.trim(), createdAt:new Date().toISOString()});
+      await put("locations", newLocId(code), {code, type:$("#l-type").value, zone:$("#l-zone").value.trim(), description:$("#l-desc").value.trim(), createdAt:new Date().toISOString()});
       await log({action:"Location added", tag:code, name:$("#l-zone").value.trim(), note:""});
       toast(`Location ${code} created`); ["#l-code","#l-desc"].forEach(s=>$(s).value="");
     }catch(x){ failed(x); }
@@ -1180,6 +1181,31 @@ dialog h3{margin:0;font-size:17px}
       else { b.dataset.armed="1"; b.textContent="Tap again to delete"; }
     };
   }
+  const LOC_TYPES = ["Shelf","Rack","Bin","Floor","Cage","Cabinet"];
+  function editLocation(id){
+    const l=S.locations.get(id); if(!l) return;
+    const n=assets().filter(a=>a.locationId===id).length;
+    const types = LOC_TYPES.includes(l.type) ? LOC_TYPES : [l.type, ...LOC_TYPES];
+    openDlg(`<h3>Edit location ${esc(l.code)}</h3>
+      <div class="grid">
+        <label class="f">Location code<input id="e-code" value="${esc(l.code)}" required></label>
+        <label class="f">Type<select id="e-type">${types.map(t=>`<option ${t===l.type?"selected":""}>${esc(t)}</option>`).join("")}</select></label>
+        <label class="f">Zone / area<input id="e-zone" value="${esc(l.zone||"")}"></label>
+        <label class="f">Description<input id="e-desc" value="${esc(l.description||"")}"></label>
+      </div>
+      ${n?`<p class="hint">${n} asset${n>1?"s are":" is"} stored here. They stay linked to this location and will show the new code.</p>`:""}
+      <p class="err" id="e-err" hidden></p>
+      ${dlgBtns("Save changes")}`, async () => {
+      const err=$("#e-err"), code=$("#e-code").value.trim().toUpperCase();
+      if (!code){ err.textContent="Enter a location code."; err.hidden=false; return false; }
+      if (locs().some(x=>x.id!==id && x.code===code)){ err.textContent=`${code} already exists.`; err.hidden=false; return false; }
+      const upd={code, type:$("#e-type").value, zone:$("#e-zone").value.trim(), description:$("#e-desc").value.trim()};
+      const lab={code:"Code", type:"Type", zone:"Zone", description:"Description"};
+      const ch=Object.keys(upd).filter(k=>(upd[k]||"")!==(l[k]||"")).map(k=>`${lab[k]}: ${l[k]||"–"} → ${upd[k]||"–"}`);
+      if (!ch.length){ toast("No changes"); return; }
+      try{ await patch("locations", id, upd); await log({action:"Location edited", tag:code, name:upd.zone, note:ch.join(" · ")}); toast(`Location ${code} updated`); }catch(x){ failed(x); }
+    });
+  }
   function deleteLocation(id){
     const l=S.locations.get(id); if(!l) return;
     const n=assets().filter(a=>a.locationId===id).length;
@@ -1193,7 +1219,7 @@ dialog h3{margin:0;font-size:17px}
     else if (act==="approve") approveAsset(id); else if (act==="reject") rejectAsset(id);
     else if (act==="retok") approveReturn(id); else if (act==="retno") declineReturn(id);
     else if (act==="accept") acceptAsset(id); else if (act==="withdraw") cancelRequest(id); else if (act==="restock") restockAsset(id);
-    else if (act==="manage") manageAsset(id); else if (act==="delloc") deleteLocation(id);
+    else if (act==="manage") manageAsset(id); else if (act==="delloc") deleteLocation(id); else if (act==="editloc") editLocation(id);
   });
 
   // ---------- renderers ----------
@@ -1224,7 +1250,7 @@ dialog h3{margin:0;font-size:17px}
       const here=all.filter(a=>a.locationId===l.id);
       return `<tr><td><span class="bin">${esc(l.code)}</span></td><td>${esc(l.type)}</td><td>${esc(l.zone||"–")}</td><td>${esc(l.description||"–")}</td>
       <td class="num">${here.length}</td><td class="num">${here.filter(a=>a.status==="available").length}</td><td class="num">${here.filter(a=>a.status==="on_hold").length}</td>
-      <td>${isAdmin?`<button class="btn quiet sm" data-act="delloc" data-id="${esc(l.id)}">Delete</button>`:""}</td></tr>`;
+      <td>${isAdmin?`<div class="row" style="gap:6px;flex-wrap:nowrap"><button class="btn quiet sm" data-act="editloc" data-id="${esc(l.id)}">Edit</button><button class="btn quiet sm" data-act="delloc" data-id="${esc(l.id)}">Delete</button></div>`:""}</td></tr>`;
     }), "No locations yet. Create shelves, racks or bins above, then assign assets to them.");
   }
   const HELD = ["approved","on_hold","return_pending"];
@@ -1724,7 +1750,7 @@ dialog h3{margin:0;font-size:17px}
       usedTags.add(tag);
       let locId = "";
       if (r.loc){ const code = r.loc.toUpperCase(); locId = byCode.get(code) || (newLocs.get(code)||{}).id;
-        if (!locId){ locId = slug(code); newLocs.set(code, {id:locId, code, type:"Shelf", zone:r.zone, description:"", createdAt:now}); byCode.set(code, locId); } }
+        if (!locId){ locId = newLocId(code, new Set([...newLocs.values()].map(x=>x.id))); newLocs.set(code, {id:locId, code, type:"Shelf", zone:r.zone, description:"", createdAt:now}); byCode.set(code, locId); } }
       else locId = (locs()[0]||{}).id || "";
       let st = statusFromText(r.status); if (OUT.includes(st)) st = "available";
       As.push({id:slug(tag), tag, name:r.name, category:(r.category ? catPick.get(r.category.toLowerCase()) : ""), model:r.model, serial:r.serial,
