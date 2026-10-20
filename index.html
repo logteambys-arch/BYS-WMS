@@ -83,6 +83,10 @@ td.num,th.num{text-align:right}
 .s-retired{background:var(--idle-soft);color:var(--idle)}
 .s-missing{background:var(--bad-soft);color:var(--bad)}
 .s-in_transit{background:var(--warn-soft);color:var(--warn)}
+.s-sg_requested{background:var(--warn-soft);color:var(--warn)}
+.s-sg_outbound{background:var(--accent-soft);color:var(--accent)}
+.s-in_sg{background:var(--pend-soft);color:var(--pend)}
+.subhead{font-size:13px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);margin:6px 0 0}
 .pm-mode .admin-only{display:none!important}
 .au-check{width:auto;margin:0}
 .s-requested{background:var(--warn-soft);color:var(--warn)}
@@ -175,15 +179,15 @@ dialog h3{margin:0;font-size:17px}
   table.stack, table.stack tbody, table.stack tr, table.stack td{display:block;width:100%}
   table.stack thead{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
   table.stack tr{border:1px solid var(--line);border-radius:var(--r);background:var(--surface);padding:6px 0;margin-bottom:10px}
-  table.stack td[data-empty]{display:none}
-  table.stack td{border:0;padding:3px 12px 3px 40%;position:relative;min-height:28px;text-align:left!important;white-space:normal!important;max-width:none!important}
-  table.stack td::before{content:attr(data-label);position:absolute;left:12px;top:5px;width:calc(40% - 20px);font-size:11px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--muted)}
-  table.stack td[data-label=""]{padding-left:12px}
+  table.stack td[data-empty]{display:none!important}
+  table.stack td{border:0;padding:4px 12px;display:flex!important;gap:10px;align-items:baseline;text-align:left!important;white-space:normal!important;max-width:none!important}
+  table.stack td::before{content:attr(data-label);flex:0 0 36%;max-width:36%;font-size:11px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);line-height:1.35}
+  table.stack td > .cv{flex:1;min-width:0;overflow-wrap:anywhere}
   table.stack td[data-label=""]::before{display:none}
   table.stack td:first-child{padding-top:8px}
   table.stack td .row{flex-wrap:wrap!important}
-  table.stack td .row > .btn, table.stack td > .btn{flex:1}
-  table.stack td > .btn{width:100%}
+  table.stack td .cv > .row > .btn, table.stack td .cv > .btn{flex:1}
+  table.stack td .cv > .btn{width:100%}
   .holder{border:0;overflow:visible}
   .holder-h{border:1px solid var(--line);border-radius:var(--r);margin-bottom:8px}
   .holder > div[style]{overflow:visible!important}
@@ -326,7 +330,7 @@ dialog h3{margin:0;font-size:17px}
         <div class="tools">
           <input type="search" id="a-search" placeholder="Search tag, name, serial, category">
           <select id="a-fstatus" aria-label="Filter by status">
-            <option value="">All statuses</option><option value="available">Available</option><option value="requested">Requested</option><option value="approved">Approved</option><option value="on_hold">On hold</option><option value="return_pending">Return pending</option><option value="inspect">Needs check</option><option value="in_transit">In transit</option><option value="missing">Missing</option><option value="retired">Retired</option>
+            <option value="">All statuses</option><option value="available">Available</option><option value="requested">Requested</option><option value="approved">Approved</option><option value="on_hold">On hold</option><option value="return_pending">Return pending</option><option value="inspect">Needs check</option><option value="in_transit">In transit</option><option value="sg_requested">Requested for SG</option><option value="sg_outbound">Shipping to SG</option><option value="in_sg">At SG</option><option value="missing">Missing</option><option value="retired">Retired</option>
           </select>
           <select id="a-floc" aria-label="Filter by location"></select>
         </div>
@@ -389,9 +393,18 @@ dialog h3{margin:0;font-size:17px}
     <div class="panel" id="mp-transit" hidden>
       <div class="tiles" id="tr-tiles"></div>
       <div class="card">
-        <h2>In transit from SG <small>samples on their way to KL, grouped by shipment</small></h2>
-        <div class="tools"><input type="search" id="tr-search" placeholder="Search tag, product or shipment"></div>
+        <h2>SG → KL <small>samples on their way to KL, grouped by shipment</small></h2>
+        <div class="tools"><input type="search" id="tr-search" placeholder="Search tag, product, shipment or person"></div>
         <div id="tr-list" class="panel"></div>
+      </div>
+      <div class="card">
+        <h2>KL → SG <small>samples going back to SG, e.g. for in-depth testing</small></h2>
+        <p class="subhead">To prepare and ship</p>
+        <div id="sg-prep"></div>
+        <p class="subhead">Shipping to SG</p>
+        <div id="sg-out" class="panel"></div>
+        <p class="subhead">At SG</p>
+        <div id="sg-at"></div>
       </div>
       <div class="card"><h2>Recently received in KL</h2><div id="tr-recent"></div></div>
     </div>
@@ -478,8 +491,9 @@ dialog h3{margin:0;font-size:17px}
 (() => {
   const $ = s => document.querySelector(s);
   const esc = v => String(v ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
-  const STATUS = {available:"Available", requested:"Requested", approved:"Approved", on_hold:"On hold", return_pending:"Return pending", cancelled:"Cancelled – to restock", inspect:"Needs check", missing:"Missing", in_transit:"In transit from SG", retired:"Retired"};
-  const OUT = ["requested","approved","on_hold","return_pending","cancelled"];
+  const STATUS = {available:"Available", requested:"Requested", approved:"Approved", on_hold:"On hold", return_pending:"Return pending", cancelled:"Cancelled – to restock", inspect:"Needs check", missing:"Missing", in_transit:"In transit from SG", sg_requested:"Requested for SG return", sg_outbound:"Shipping to SG", in_sg:"At SG", retired:"Retired"};
+  const SGS = ["sg_requested","sg_outbound","in_sg"];
+  const OUT = ["requested","approved","on_hold","return_pending","cancelled", ...SGS];
   const ymd = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
   const today = () => ymd(new Date());
   const addDays = (n, from) => { const d = from ? new Date(from) : new Date(); d.setDate(d.getDate()+n); return ymd(d); };
@@ -498,7 +512,7 @@ dialog h3{margin:0;font-size:17px}
 
   const S = { assets:new Map(), locations:new Map(), accounts:new Map(), history:[], myLog:null };
   let seenAt = "";
-  const DECISIONS = ["Approved","Rejected","Approval cancelled","Return approved","Return declined","Checked in by manager"];
+  const DECISIONS = ["Approved","Rejected","Approval cancelled","Return approved","Return declined","Checked in by manager","SG return declined","Shipped to SG"];
   let B = null, userNs = null, dl = null, me = null, myAcct = null, isMgr = false, isAdmin = false, isPM = false;
   function setRoleFlags(a){ isAdmin = !!a && a.role==="admin"; isPM = !!a && a.role==="pm"; isMgr = isAdmin || isPM; document.body.classList.toggle("pm-mode", isPM && !isAdmin); }
   const names = {};
@@ -923,11 +937,22 @@ dialog h3{margin:0;font-size:17px}
     if (!me){ toast("Sign in to request assets."); return; }
     openDlg(`<h3>Request ${esc(a.name)}</h3>
       <p class="hint"><span class="tag">${esc(a.tag)}</span> · stored at <span class="bin">${esc(locCode(a.locationId))}</span></p>
-      <label class="f">Return by (up to ${MAX_LOAN_DAYS} days)<input type="date" id="d-due" required min="${today()}" max="${latestDue()}" value="${addDays(7)}"></label>
+      ${isMgr?`<label class="f">What is it for?<select id="d-kind"><option value="loan">Borrow it in KL</option><option value="sg">Return shipment to SG (e.g. in-depth testing)</option></select></label>`:""}
+      <label class="f" id="d-due-wrap">Return by (up to ${MAX_LOAN_DAYS} days)<input type="date" id="d-due" required min="${today()}" max="${latestDue()}" value="${addDays(7)}"></label>
       <label class="f">Purpose<textarea id="d-purpose" placeholder="e.g. Firmware test for SWQA, unit to desk 4F"></textarea></label>
-      <p class="hint">A manager reviews your request. Once approved, collect the item and tap Accept to start the loan.</p>
+      <p class="hint" id="d-req-hint">A manager reviews your request. Once approved, collect the item and tap Accept to start the loan.</p>
       ${dlgBtns("Send request")}`, async () => {
       const due=$("#d-due").value, purpose=$("#d-purpose").value.trim();
+      if ($("#d-kind") && $("#d-kind").value==="sg"){
+        if (!purpose){ toast("Say why it's going back to SG."); return false; }
+        try{
+          const cur = await lockAndCheck(id, x=>x.status==="available"); if(!cur) return;
+          await patch("assets", id, {status:"sg_requested", holderId:me, requestedAt:new Date().toISOString(), purpose});
+          await log({action:"Requested for SG return", tag:a.tag, name:a.name, note:purpose, assetId:id, requesterId:me});
+          toast(`${a.tag} requested for return to SG. The store manager will prepare it.`);
+        }catch(x){ failed(x); }
+        return;
+      }
       const dueBad = dueProblem(due); if (dueBad){ toast(dueBad); return false; }
       try{
         const cur = await lockAndCheck(id, x=>x.status==="available"); if(!cur) return;
@@ -937,6 +962,13 @@ dialog h3{margin:0;font-size:17px}
       }catch(x){ failed(x); }
     });
   }
+  document.addEventListener("change", e => {
+    if (e.target.id!=="d-kind") return;
+    const sg = e.target.value==="sg";
+    $("#d-due-wrap").hidden = sg; $("#d-due").required = !sg;
+    $("#d-purpose").placeholder = sg ? "Reason, e.g. in-depth testing at SG lab" : "e.g. Firmware test for SWQA, unit to desk 4F";
+    $("#d-req-hint").textContent = sg ? "The store manager prepares and ships it from the Transit tab. You'll see each step in My activity." : "A manager reviews your request. Once approved, collect the item and tap Accept to start the loan.";
+  });
   const clearReturn = {returnRequestedAt:null, returnCondition:null, returnNote:""};
   const clearLoan = {holderId:null, requestedAt:null, holdSince:null, dueBack:null, purpose:"", approvedBy:null, approvedAt:null, managerNote:"", returnDeclined:"", cancelledAt:null, ...clearReturn};
   function approveReturn(id){
@@ -1024,6 +1056,17 @@ dialog h3{margin:0;font-size:17px}
   }
   function cancelRequest(id){
     const a=S.assets.get(id); if(!a) return;
+    if (a.status==="sg_requested"){
+      openDlg(`<h3>Withdraw SG return request?</h3><p class="hint"><span class="tag">${esc(a.tag)}</span> · ${esc(a.name)} stays in KL stock.</p>${dlgBtns("Withdraw request")}`, async () => {
+        try{
+          const cur = await lockAndCheck(id, x=>x.status==="sg_requested" && x.holderId===me); if(!cur) return;
+          await patch("assets", id, {status:"available", holderId:null, requestedAt:null, purpose:""});
+          await log({action:"Withdrawn", tag:a.tag, name:a.name, note:"SG return request", assetId:id, requesterId:me});
+          toast("Request withdrawn");
+        }catch(x){ failed(x); }
+      });
+      return;
+    }
     const wasApproved = a.status==="approved";
     openDlg(`<h3>Withdraw request?</h3><p class="hint"><span class="tag">${esc(a.tag)}</span> · ${esc(a.name)}</p>
       <p class="hint">${wasApproved ? "This was already approved, so the store manager will be told to put the item back in stock. If you've already collected it, keep it and tap Accept instead." : "The item goes back to available stock."}</p>${dlgBtns("Withdraw request")}`, async () => {
@@ -1112,7 +1155,7 @@ dialog h3{margin:0;font-size:17px}
       <label class="f">Accessories<input id="d-acc" value="${esc(a.accessories||"")}" placeholder="e.g. USB-C cable, wrist rest, carry pouch"></label>
       <label class="f">Notes / specs<textarea id="d-notes">${esc(a.notes||"")}</textarea></label>
       ${transit?`<p class="hint">In transit from SG. A store manager receives it on the <b>Transit</b> tab.</p>`:""}
-      ${held&&!transit?`<p class="hint">${STATUS[a.status]} for ${esc(holderName(a.holderId))}. ${a.status==="on_hold"?"Use “Check in” on the Who has what tab to release it.":"Deal with it on the Approvals tab."}</p>`:""}
+      ${held&&!transit?`<p class="hint">${STATUS[a.status]} for ${esc(holderName(a.holderId))}. ${a.status==="on_hold"?"Use “Check in” on the Who has what tab to release it.":SGS.includes(a.status)?"It's handled on the Transit tab.":"Deal with it on the Approvals tab."}</p>`:""}
       <p class="hint" style="margin:0"><button type="button" class="linkbtn" id="d-hist">View this asset's history</button></p>
       <div class="row" style="justify-content:space-between">${isAdmin?`<button class="btn danger" value="delete" type="button" id="d-del">Delete asset</button>`:"<span></span>"}${dlgBtns("Save changes").replace('<div class="row end">','<div class="row">')}</div>`, async () => {
       const newName = $("#d-name").value.trim().replace(/\s+/g," ");
@@ -1171,7 +1214,7 @@ dialog h3{margin:0;font-size:17px}
       <td>${esc(a.category||"–")}</td><td class="tag" style="font-weight:500">${esc(a.serial||"–")}</td>
       <td class="sub2" style="max-width:24ch">${esc(a.accessories||"–")}</td>
       <td><span class="bin">${esc(locCode(a.locationId))}</span></td><td>${pill(a)}</td>
-      <td>${OUT.includes(a.status)?esc(holderName(a.holderId))+(a.status==="cancelled"?`<div class="sub2">Withdrawn – put back</div>`:`<div class="sub2">Due ${fmtDate(a.dueBack)}</div>`):"–"}</td>
+      <td>${OUT.includes(a.status)?esc(holderName(a.holderId))+(a.status==="cancelled"?`<div class="sub2">Withdrawn – put back</div>`:SGS.includes(a.status)?`<div class="sub2">SG return</div>`:`<div class="sub2">Due ${fmtDate(a.dueBack)}</div>`):"–"}</td>
       <td><button class="btn quiet sm" data-act="manage" data-id="${esc(a.id)}">Edit</button></td></tr>`),
       S.assets.size ? "No assets match this search." : "No assets yet. Fill in the form above to create your first one.");
   }
@@ -1217,8 +1260,9 @@ dialog h3{margin:0;font-size:17px}
       <td><div class="row" style="flex-wrap:nowrap;gap:6px"><button class="btn sm" data-act="approve" data-id="${esc(a.id)}">Approve</button><button class="btn danger sm" data-act="reject" data-id="${esc(a.id)}">Reject</button></div></td></tr>`),
       "No requests waiting. New requests from staff appear here.");
     const rets = assets().filter(a=>a.status==="return_pending").sort((x,y)=>(x.returnRequestedAt||"").localeCompare(y.returnRequestedAt||""));
-    $("#retList").innerHTML = table(["Submitted","Person","Tag","Product","Reported","Their note","Usual location",""], rets.map(a=>`<tr>
+    $("#retList").innerHTML = table(["Submitted","Person","Tag","Product","Accessories to check","Reported","They say they returned","Usual location",""], rets.map(a=>`<tr>
       <td style="white-space:nowrap">${fmtDT(a.returnRequestedAt)}</td><td><b>${esc(holderName(a.holderId))}</b></td><td class="tag">${esc(a.tag)}</td><td>${esc(a.name)}</td>
+      <td>${a.accessories?`<b>${esc(a.accessories)}</b>`:'<span class="sub2">None recorded</span>'}</td>
       <td>${a.returnCondition==="check"?'<span class="pill s-overdue">Issue reported</span>':'<span class="pill s-available">Complete</span>'}</td>
       <td class="sub2">${esc(a.returnNote||"–")}</td><td><span class="bin">${esc(locCode(a.locationId))}</span></td>
       <td><div class="row" style="flex-wrap:nowrap;gap:6px"><button class="btn sm" data-act="retok" data-id="${esc(a.id)}">Approve</button><button class="btn danger sm" data-act="retno" data-id="${esc(a.id)}">Decline</button></div></td></tr>`),
@@ -1230,8 +1274,9 @@ dialog h3{margin:0;font-size:17px}
       <td><button class="btn sm" data-act="restock" data-id="${esc(a.id)}">Put back in stock</button></td></tr>`),
       "Nothing to put back.");
     const appr = assets().filter(a=>a.status==="approved").sort((x,y)=>(x.approvedAt||"").localeCompare(y.approvedAt||""));
-    $("#apprList").innerHTML = table(["Approved","Person","Tag","Product","Return by","Note",""], appr.map(a=>`<tr>
+    $("#apprList").innerHTML = table(["Approved","Person","Tag","Product","Hand over with","Return by","Note",""], appr.map(a=>`<tr>
       <td style="white-space:nowrap">${fmtDT(a.approvedAt)}<div class="sub2">by ${esc(holderName(a.approvedBy))}</div></td><td><b>${esc(holderName(a.holderId))}</b></td><td class="tag">${esc(a.tag)}</td><td>${esc(a.name)}</td>
+      <td>${a.accessories?esc(a.accessories):'<span class="sub2">None recorded</span>'}</td>
       <td>${fmtDate(a.dueBack)}</td><td class="sub2">${esc(a.managerNote||"–")}</td>
       <td><button class="btn quiet sm" data-act="reject" data-id="${esc(a.id)}">Cancel approval</button></td></tr>`),
       "Nothing waiting for pickup.");
@@ -1261,7 +1306,9 @@ dialog h3{margin:0;font-size:17px}
     const late = all.filter(a=>a.eta && a.eta < today()), since = addDays(-30);
     const recent = S.history.filter(h=>h.action==="Received in KL");
     const ships = new Set(all.map(a=>a.shipRef||""));
-    $("#tr-tiles").innerHTML = [["In transit",all.length],["Shipments",ships.size],["Past expected arrival",late.length,late.length>0],["Received in last 30 days",recent.filter(h=>h.at && ymd(new Date(h.at))>=since).length]]
+    const toPrep = assets().filter(a=>a.status==="sg_requested"), outb = assets().filter(a=>a.status==="sg_outbound"), atSG = assets().filter(a=>a.status==="in_sg");
+    $("#tr-tiles").innerHTML = [["Coming to KL",all.length],["Past expected arrival",late.length,late.length>0],["Received in last 30 days",recent.filter(h=>h.at && ymd(new Date(h.at))>=since).length],
+      ["To prepare for SG",toPrep.length,toPrep.length>0],["Shipping to SG",outb.length],["At SG",atSG.length]]
       .map(([l,v,al])=>`<div class="tile${al?" alert":""}"><b>${v}</b><span>${l}</span></div>`).join("");
     const q = $("#tr-search").value.trim().toLowerCase();
     const list = all.filter(a=>!q || [a.tag,a.name,a.shipRef,a.category].some(v=>String(v||"").toLowerCase().includes(q)));
@@ -1276,9 +1323,88 @@ dialog h3{margin:0;font-size:17px}
         <td><span class="bin">${esc(locCode(a.locationId))}</span></td>
         <td>${isAdmin?`<button class="btn quiet sm" data-recv="${esc(a.id)}">Receive</button>`:""}</td></tr>`).join("")}</tbody></table></div></div>`;
     }).join("") : `<div class="empty">${all.length ? "No shipments match this search." : "Nothing in transit. Assets created as “In SG – shipping to KL” appear here until a store manager receives them."}</div>`;
+    renderOutbound(toPrep, outb, atSG, q);
     $("#tr-recent").innerHTML = table(["Received","Item","Result","By"], recent.slice(0,15).map(h=>`<tr><td style="white-space:nowrap">${fmtDT(h.at)}</td><td><span class="tag">${esc(h.tag)}</span> <span class="sub2">${esc(h.name||"")}</span></td><td class="sub2">${esc(h.note||"")}</td><td>${esc(holderName(h.userId))}</td></tr>`), "Nothing received yet.");
   }
   $("#tr-search").addEventListener("input", renderTransit);
+  function renderOutbound(toPrep, outb, atSG, q){
+    const hit = a => !q || [a.tag,a.name,a.sgShipRef,a.category,holderName(a.holderId),a.purpose].some(v=>String(v||"").toLowerCase().includes(q));
+    const prod = a => `${esc(a.name)}${a.accessories?`<div class="sub2">With: ${esc(a.accessories)}</div>`:""}`;
+    $("#sg-prep").innerHTML = table(["Requested","By","Tag","Product","Shelf","Reason",""], toPrep.filter(hit).sort((x,y)=>(x.requestedAt||"").localeCompare(y.requestedAt||"")).map(a=>`<tr>
+      <td style="white-space:nowrap">${fmtDT(a.requestedAt)}</td><td><b>${esc(holderName(a.holderId))}</b></td><td class="tag">${esc(a.tag)}</td><td>${prod(a)}</td>
+      <td><span class="bin">${esc(locCode(a.locationId))}</span></td><td class="sub2">${esc(a.purpose||"–")}</td>
+      <td>${isAdmin?`<div class="row" style="flex-wrap:nowrap;gap:6px"><button class="btn sm" data-sgship="${esc(a.id)}">Prepare &amp; ship</button><button class="btn danger sm" data-sgdecline="${esc(a.id)}">Decline</button></div>`:'<span class="sub2">Waiting for store manager</span>'}</td></tr>`),
+      "Nothing waiting. A Project manager requests an SG return from the request window on My desk.");
+    const groups = {}; outb.filter(hit).forEach(a=>(groups[a.sgShipRef||""]=groups[a.sgShipRef||""]||[]).push(a));
+    $("#sg-out").innerHTML = Object.keys(groups).length ? Object.keys(groups).sort().map(k=>{
+      const g = groups[k], eta = g.map(a=>a.sgEta).filter(Boolean).sort()[0], late = eta && eta < today();
+      return `<div class="holder"><div class="holder-h"><span><strong>${k?`Shipment ${esc(k)}`:"No shipment reference"}</strong> <span class="sub2">${g.length} item${g.length>1?"s":""} · shipped ${fmtDate(g[0].sgShippedAt)} by ${esc(holderName(g[0].sgShippedBy))}</span></span>
+        ${eta?`<span class="pill ${late?"s-overdue":"s-sg_outbound"}">${late?"Late · was due":"Arriving"} ${fmtDate(eta)}</span>`:'<span class="sub2">No arrival date</span>'}</div>
+      <div style="overflow-x:auto"><table><thead><tr><th>Tag</th><th>Product</th><th>Requested by</th><th>Reason</th><th></th></tr></thead><tbody>${g.map(a=>`<tr>
+        <td class="tag">${esc(a.tag)}</td><td>${prod(a)}</td><td>${esc(holderName(a.holderId))}</td><td class="sub2">${esc(a.purpose||"–")}</td>
+        <td>${isMgr?`<button class="btn quiet sm" data-sgarrived="${esc(a.id)}">Arrived in SG</button>`:""}</td></tr>`).join("")}</tbody></table></div></div>`;
+    }).join("") : `<div class="empty">Nothing on its way to SG.</div>`;
+    $("#sg-at").innerHTML = table(["Tag","Product","Requested by","Reason","Arrived",""], atSG.filter(hit).map(a=>`<tr>
+      <td class="tag">${esc(a.tag)}</td><td>${prod(a)}</td><td>${esc(holderName(a.holderId))}</td><td class="sub2">${esc(a.purpose||"–")}</td><td>${fmtDate(a.sgArrivedAt)}</td>
+      <td>${isMgr?`<button class="btn quiet sm" data-sgback="${esc(a.id)}">Send back to KL</button>`:""}</td></tr>`), "No samples at SG right now.");
+  }
+  document.addEventListener("click", e => {
+    const ship = e.target.closest("[data-sgship]"), dec = e.target.closest("[data-sgdecline]"), arr = e.target.closest("[data-sgarrived]"), back = e.target.closest("[data-sgback]");
+    if (ship && isAdmin){
+      const a = S.assets.get(ship.dataset.sgship); if (!a) return;
+      openDlg(`<h3>Prepare ${esc(a.tag)} for SG</h3>
+        <p class="hint">${esc(a.name)} · requested by <b>${esc(holderName(a.holderId))}</b>${a.purpose?` · ${esc(a.purpose)}`:""}</p>
+        ${accBox(a, "Pack these with it")}
+        <div class="grid"><label class="f">Shipment / DO reference<input id="d-ship" placeholder="e.g. DO-30211"></label><label class="f">Expected arrival in SG<input type="date" id="d-eta" min="${today()}"></label></div>
+        <label class="f">Note<input id="d-note" placeholder="Optional, e.g. packed in original box"></label>
+        ${dlgBtns("Ship to SG")}`, async () => {
+        const ref = $("#d-ship").value.trim(), eta = $("#d-eta").value || null, note = $("#d-note").value.trim();
+        try{
+          const cur = await lockAndCheck(a.id, x=>x.status==="sg_requested"); if (!cur) return;
+          await patch("assets", a.id, {status:"sg_outbound", sgShipRef:ref, sgEta:eta, sgShippedAt:new Date().toISOString(), sgShippedBy:me, sgNote:note});
+          await log({action:"Shipped to SG", tag:a.tag, name:a.name, note:`${ref?`Shipment ${ref}`:"No shipment reference"}${eta?` · ETA ${eta}`:""}${note?" · "+note:""}`, assetId:a.id, requesterId:a.holderId});
+          toast(`${a.tag} marked as shipping to SG`);
+        }catch(x){ failed(x); }
+      });
+    } else if (dec && isAdmin){
+      const a = S.assets.get(dec.dataset.sgdecline); if (!a) return;
+      openDlg(`<h3>Decline SG return</h3><p class="hint"><span class="tag">${esc(a.tag)}</span> · ${esc(a.name)} for <b>${esc(holderName(a.holderId))}</b>. It stays in KL stock.</p>
+        <label class="f">Reason (they will see this)<input id="d-note" required placeholder="e.g. Needed for KL testing this week"></label>${dlgBtns("Decline")}`, async () => {
+        const note = $("#d-note").value.trim(); if (!note){ toast("Enter a reason so they know why."); return false; }
+        try{
+          const cur = await lockAndCheck(a.id, x=>x.status==="sg_requested"); if (!cur) return;
+          await patch("assets", a.id, {status:"available", holderId:null, requestedAt:null, purpose:""});
+          await log({action:"SG return declined", tag:a.tag, name:a.name, note, assetId:a.id, requesterId:a.holderId});
+          toast("SG return declined");
+        }catch(x){ failed(x); }
+      });
+    } else if (arr && isMgr){
+      const a = S.assets.get(arr.dataset.sgarrived); if (!a) return;
+      openDlg(`<h3>Arrived in SG?</h3><p class="hint"><span class="tag">${esc(a.tag)}</span> · ${esc(a.name)}${a.sgShipRef?` · shipment ${esc(a.sgShipRef)}`:""}</p><p class="hint">Confirm it has reached SG. It will show as <b>At SG</b> until it's sent back.</p>${dlgBtns("Confirm arrival")}`, async () => {
+        try{
+          const cur = await lockAndCheck(a.id, x=>x.status==="sg_outbound"); if (!cur) return;
+          await patch("assets", a.id, {status:"in_sg", sgArrivedAt:new Date().toISOString()});
+          await log({action:"Arrived in SG", tag:a.tag, name:a.name, note:a.sgShipRef?`Shipment ${a.sgShipRef}`:"", assetId:a.id, requesterId:a.holderId});
+          toast(`${a.tag} is now at SG`);
+        }catch(x){ failed(x); }
+      });
+    } else if (back && isMgr){
+      const a = S.assets.get(back.dataset.sgback); if (!a) return;
+      openDlg(`<h3>Send ${esc(a.tag)} back to KL</h3><p class="hint">${esc(a.name)}. It will appear under <b>SG → KL</b> for the store manager to receive.</p>
+        <div class="grid"><label class="f">Shipment / DO reference<input id="d-ship" placeholder="e.g. DO-30455"></label><label class="f">Expected arrival in KL<input type="date" id="d-eta" min="${today()}"></label></div>
+        <label class="f">Shelf when it arrives${shelfSelect("d-loc", a.locationId)}</label>
+        ${dlgBtns("Send back to KL")}`, async () => {
+        const ref = $("#d-ship").value.trim(), eta = $("#d-eta").value || null, loc = $("#d-loc").value || a.locationId;
+        try{
+          const cur = await lockAndCheck(a.id, x=>x.status==="in_sg"); if (!cur) return;
+          await patch("assets", a.id, {status:"in_transit", holderId:null, transitFrom:"SG", shipRef:ref, eta, dispatchedAt:new Date().toISOString(), dispatchedBy:me, locationId:loc});
+          await log({action:"Sent back to KL", tag:a.tag, name:a.name, note:`${ref?`Shipment ${ref}`:"No shipment reference"}${eta?` · ETA ${eta}`:""}`, assetId:a.id, requesterId:a.holderId});
+          toast(`${a.tag} is on its way back to KL`);
+        }catch(x){ failed(x); }
+      });
+    }
+  });
+
   async function receiveOne(a, res, loc, note){
     const st = res==="ok" ? "available" : res==="issue" ? "inspect" : "missing";
     await patch("assets", a.id, {status:st, locationId:loc||a.locationId, receivedAt:new Date().toISOString(), receivedBy:me, receiveResult:res, receiveNote:note||""});
@@ -1318,7 +1444,7 @@ dialog h3{margin:0;font-size:17px}
   function addMonths(iso, n){ const d = new Date(iso), day = d.getDate(); d.setDate(1); d.setMonth(d.getMonth()+n); const last = new Date(d.getFullYear(), d.getMonth()+1, 0).getDate(); d.setDate(Math.min(day, last)); return ymd(d); }
   const auditMonths = a => +a.auditMonths || AUDIT_DEFAULT;
   const auditDue = a => addMonths(a.lastAuditAt || a.receivedAt || a.createdAt || new Date().toISOString(), auditMonths(a));
-  function auditState(a){ if (a.status==="retired" || a.status==="in_transit") return "off"; const due = auditDue(a); if (due < today()) return "overdue"; if (due <= addDays(AUDIT_SOON_DAYS)) return "soon"; return "ok"; }
+  function auditState(a){ if (["retired","in_transit","sg_outbound","in_sg"].includes(a.status)) return "off"; const due = auditDue(a); if (due < today()) return "overdue"; if (due <= addDays(AUDIT_SOON_DAYS)) return "soon"; return "ok"; }
   const AUDIT_PILL = {overdue:'<span class="pill s-overdue">Overdue</span>', soon:'<span class="pill s-requested">Due soon</span>', ok:'<span class="pill s-available">On schedule</span>', off:'<span class="pill s-retired">Not audited</span>'};
   function auditCounts(){
     const c = {overdue:0, soon:0, ok:0, done90:0}, since = addDays(-90);
@@ -1398,7 +1524,7 @@ dialog h3{margin:0;font-size:17px}
   function renderReport(){
     const c=stats();
     $("#r-stamp").textContent = `Generated ${fmtDT(new Date().toISOString())} · ${S.locations.size} locations`;
-    const tiles=[["Total assets",c.total],["Available",c.available],["In transit",c.in_transit||0],["Pending approval",c.requested,c.requested>0],["Awaiting pickup",c.approved],["Returns to inspect",c.return_pending,c.return_pending>0],["On hold",c.on_hold],["Overdue",c.overdue,c.overdue>0],["Needs check",c.inspect],["Missing",c.missing||0,(c.missing||0)>0],["Audits overdue",auditCounts().overdue,auditCounts().overdue>0],["Retired",c.retired]];
+    const tiles=[["Total assets",c.total],["Available",c.available],["In transit",c.in_transit||0],["SG returns",(c.sg_requested||0)+(c.sg_outbound||0)+(c.in_sg||0)],["Pending approval",c.requested,c.requested>0],["Awaiting pickup",c.approved],["Returns to inspect",c.return_pending,c.return_pending>0],["On hold",c.on_hold],["Overdue",c.overdue,c.overdue>0],["Needs check",c.inspect],["Missing",c.missing||0,(c.missing||0)>0],["Audits overdue",auditCounts().overdue,auditCounts().overdue>0],["Retired",c.retired]];
     $("#r-tiles").innerHTML = tiles.map(([l,v,al])=>`<div class="tile${al?" alert":""}"><b>${v}</b><span>${l}</span></div>`).join("");
     const H=["Location","#Total","#Avail.","#On hold",""];
     $("#r-loc").innerHTML = table(H, groupRows(a=>a.locationId, (k,html)=>html?`<span class="bin">${esc(locCode(k))}</span>`:locCode(k)), "No stock recorded yet.");
@@ -1411,10 +1537,10 @@ dialog h3{margin:0;font-size:17px}
     $("#exLoad").disabled = !!ex; $("#exClear").disabled = !ex;
   }
   function renderUser(){
-    const reqs = assets().filter(a=>(a.status==="requested"||a.status==="approved") && a.holderId===me).sort((x,y)=>(x.requestedAt||"").localeCompare(y.requestedAt||""));
-    $("#myReqs").innerHTML = table(["Tag","Product","Return by","Status",""], reqs.map(a=>`<tr><td class="tag">${esc(a.tag)}</td><td>${esc(a.name)}${a.status==="approved"?`<div class="sub2">Collect from <span class="bin">${esc(locCode(a.locationId))}</span>${a.managerNote?" · "+esc(a.managerNote):""}</div>`:""}</td><td>${fmtDate(a.dueBack)}</td>
-      <td>${a.status==="approved"?'<span class="pill s-approved">Approved – ready to collect</span>':'<span class="pill s-requested">Waiting for manager</span>'}</td>
-      <td><div class="row" style="flex-wrap:nowrap;gap:6px">${a.status==="approved"?`<button class="btn sm" data-act="accept" data-id="${esc(a.id)}">Accept</button>`:""}<button class="btn quiet sm" data-act="withdraw" data-id="${esc(a.id)}">Withdraw</button></div></td></tr>`),
+    const reqs = assets().filter(a=>(a.status==="requested"||a.status==="approved"||SGS.includes(a.status)) && a.holderId===me).sort((x,y)=>(x.requestedAt||"").localeCompare(y.requestedAt||""));
+    $("#myReqs").innerHTML = table(["Tag","Product","Return by","Status",""], reqs.map(a=>`<tr><td class="tag">${esc(a.tag)}</td><td>${esc(a.name)}${a.status==="approved"?`<div class="sub2">Collect from <span class="bin">${esc(locCode(a.locationId))}</span>${a.managerNote?" · "+esc(a.managerNote):""}</div>`:""}</td><td>${SGS.includes(a.status)?"SG return":fmtDate(a.dueBack)}</td>
+      <td>${a.status==="approved"?'<span class="pill s-approved">Approved – ready to collect</span>':a.status==="sg_requested"?'<span class="pill s-sg_requested">Waiting for store manager to ship</span>':a.status==="sg_outbound"?'<span class="pill s-sg_outbound">Shipping to SG</span>':a.status==="in_sg"?'<span class="pill s-in_sg">At SG</span>':'<span class="pill s-requested">Waiting for manager</span>'}</td>
+      <td><div class="row" style="flex-wrap:nowrap;gap:6px">${a.status==="approved"?`<button class="btn sm" data-act="accept" data-id="${esc(a.id)}">Accept</button>`:""}${a.status==="requested"||a.status==="approved"||a.status==="sg_requested"?`<button class="btn quiet sm" data-act="withdraw" data-id="${esc(a.id)}">Withdraw</button>`:'<span class="sub2">See Transit tab</span>'}</div></td></tr>`),
       "No open requests.");
     renderMyLog();
     const mine = assets().filter(a=>(a.status==="on_hold"||a.status==="return_pending") && a.holderId===me).sort((x,y)=>(x.dueBack||"").localeCompare(y.dueBack||""));
@@ -1466,7 +1592,8 @@ dialog h3{margin:0;font-size:17px}
     renderCatPicker(); if (isMgr) renderCategories();
     fillSelect("#u-fcat", cats.map(c=>({v:c,t:c})), "All categories");
     $("#n-assets").textContent = S.assets.size; $("#n-locations").textContent = S.locations.size;
-    const trAll = assets().filter(a=>a.status==="in_transit"); $("#n-transit").textContent = trAll.length; $("#n-transit").classList.toggle("hot", trAll.some(a=>a.eta && a.eta < today()));
+    const trAll = assets().filter(a=>a.status==="in_transit"), sgPrep = assets().filter(a=>a.status==="sg_requested").length;
+    $("#n-transit").textContent = trAll.length + sgPrep; $("#n-transit").classList.toggle("hot", trAll.some(a=>a.eta && a.eta < today()) || (isAdmin && sgPrep>0));
     $("#n-holds").textContent = new Set(assets().filter(a=>["approved","on_hold","return_pending"].includes(a.status) && a.holderId).map(a=>a.holderId)).size;
     const auc = auditCounts(); $("#n-audit").textContent = auc.overdue + auc.soon; $("#n-audit").classList.toggle("hot", auc.overdue>0);
     const np = assets().filter(a=>a.status==="requested"||a.status==="return_pending"||a.status==="cancelled").length;
@@ -1970,7 +2097,7 @@ dialog h3{margin:0;font-size:17px}
       const heads=[...t.querySelectorAll("thead th")].map(th=>th.textContent.trim());
       if (!heads.length) return;
       t.classList.add("stack");
-      t.querySelectorAll("tbody tr").forEach(tr=>[...tr.children].forEach((td,i)=>{ if (!td.hasAttribute("data-label")) td.setAttribute("data-label", heads[i]||""); if (/^[–-]?$/.test(td.textContent.trim()) && !td.querySelector("input,button")) td.setAttribute("data-empty",""); else td.removeAttribute("data-empty"); }));
+      t.querySelectorAll("tbody tr").forEach(tr=>[...tr.children].forEach((td,i)=>{ if (!td.hasAttribute("data-label")) td.setAttribute("data-label", heads[i]||""); if (!(td.childNodes.length===1 && td.firstChild.nodeType===1 && td.firstChild.classList.contains("cv"))){ const cv=document.createElement("div"); cv.className="cv"; while (td.firstChild) cv.appendChild(td.firstChild); td.appendChild(cv); } if (/^[–-]?$/.test(td.textContent.trim()) && !td.querySelector("input,button")) td.setAttribute("data-empty",""); else td.removeAttribute("data-empty"); }));
     });
   }
   let labelQueued = false;
