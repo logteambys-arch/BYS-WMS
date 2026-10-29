@@ -248,7 +248,7 @@ dialog h3{margin:0;font-size:17px}
         <div class="grid">
           <label class="f">Full name<input id="u-name" required placeholder="e.g. Tan Kang Zheng"></label>
           <label class="f"><span id="u-user-label">Username</span><input id="u-user" required placeholder="e.g. kangzheng" autocapitalize="none" spellcheck="false"></label>
-          <label class="f">Role<select id="u-role"><option value="staff">Staff – request and return assets</option><option value="pm">Project manager – creates assets, tracks transit</option><option value="assistant">Assistant Store Manager – full access</option><option value="manager">Store manager – full access</option></select></label>
+          <label class="f">Role<select id="u-role"><option value="staff">Staff – request and return assets</option><option value="pm">Project manager – creates assets, tracks transit</option><option value="assistant">Assistant Store Manager – full access</option><option value="manager">Store manager – full access</option><option value="client">Client – view inventory only</option></select></label>
           <label class="f">Temporary password<div class="pwrow"><input id="u-pw" required minlength="8" autocomplete="new-password"><button class="btn quiet" type="button" id="u-gen">Generate</button></div></label>
         </div>
         <p class="err" id="accErr" hidden></p>
@@ -452,6 +452,21 @@ dialog h3{margin:0;font-size:17px}
     </div>
   </section>
 
+  <!-- ================= CLIENT (view only) ================= -->
+  <section id="view-client" class="panel" hidden>
+    <div class="tiles" id="c-tiles"></div>
+    <div class="card">
+      <h2>Inventory</h2>
+      <p class="hint">View only. Updated live as the warehouse makes changes.</p>
+      <div class="tools">
+        <input type="search" id="c-search" placeholder="Search product, tag, model, serial or category">
+        <select id="c-fcat" aria-label="Category"></select>
+        <select id="c-fstatus" aria-label="Status"><option value="">All statuses</option></select>
+      </div>
+      <div id="clientTable"></div>
+    </div>
+  </section>
+
   <!-- ================= USER ================= -->
   <section id="view-user" class="panel" hidden>
     <div class="card">
@@ -515,8 +530,8 @@ dialog h3{margin:0;font-size:17px}
   const S = { assets:new Map(), locations:new Map(), accounts:new Map(), history:[], myLog:null };
   let seenAt = "";
   const DECISIONS = ["Approved","Rejected","Approval cancelled","Return approved","Return declined","Checked in by manager","SG return declined","Shipped to SG"];
-  let B = null, userNs = null, dl = null, me = null, myAcct = null, isMgr = false, isAdmin = false, isPM = false;
-  function setRoleFlags(a){ isAdmin = !!a && a.role==="admin"; isPM = !!a && a.role==="pm"; isMgr = isAdmin || isPM; document.body.classList.toggle("pm-mode", isPM && !isAdmin); }
+  let B = null, userNs = null, dl = null, me = null, myAcct = null, isMgr = false, isAdmin = false, isPM = false, isClient = false;
+  function setRoleFlags(a){ isAdmin = !!a && a.role==="admin"; isPM = !!a && a.role==="pm"; isClient = !!a && a.role==="client"; isMgr = isAdmin || isPM; document.body.classList.toggle("pm-mode", isPM && !isAdmin); }
   const names = {};
   let view = "manager", mpanel = "assets";
   const store = { get(k){ try{ return sessionStorage.getItem(k) ?? localStorage.getItem(k); }catch(e){ return null; } },
@@ -605,9 +620,9 @@ dialog h3{margin:0;font-size:17px}
      ===================================================================== */
   /* Roles. Assistant Store Managers have the same access as the Store Manager
      (stored as role "admin" with title "assistant", so the Firebase rules need no change). */
-  const ROLE_LABEL = {manager:"Store manager", assistant:"Assistant Store Manager", pm:"Project manager", staff:"Staff"};
-  const ROLE_FIELDS = {manager:{role:"admin", title:null}, assistant:{role:"admin", title:"assistant"}, pm:{role:"pm", title:null}, staff:{role:"staff", title:null}};
-  const pickOf = a => a.role==="admin" ? (a.title==="assistant" ? "assistant" : "manager") : a.role==="pm" ? "pm" : "staff";
+  const ROLE_LABEL = {manager:"Store manager", assistant:"Assistant Store Manager", pm:"Project manager", staff:"Staff", client:"Client (view only)"};
+  const ROLE_FIELDS = {manager:{role:"admin", title:null}, assistant:{role:"admin", title:"assistant"}, pm:{role:"pm", title:null}, staff:{role:"staff", title:null}, client:{role:"client", title:null}};
+  const pickOf = a => a.role==="admin" ? (a.title==="assistant" ? "assistant" : "manager") : a.role==="pm" ? "pm" : a.role==="client" ? "client" : "staff";
   const roleLabel = a => ROLE_LABEL[pickOf(a)];
   const storeManagers = () => [...S.accounts.values()].filter(a=>a.active && pickOf(a)==="manager");
   const pwProblem = p => p.length < 8 ? "Use at least 8 characters." : null;
@@ -776,7 +791,7 @@ dialog h3{margin:0;font-size:17px}
   }
   let nameReq = false;
   function resolveNames(){   // only for records made before logins existed
-    if (!userNs || nameReq) return;
+    if (!userNs || nameReq || isClient) return;
     const ids = [...new Set(assets().flatMap(a=>[a.holderId,a.approvedBy]).concat(S.history.map(h=>h.userId), (S.myLog||[]).map(h=>h.userId)).filter(x=>x && String(x).startsWith("u_") && !names[x]))];
     if (!ids.length) return;
     nameReq = true;
@@ -792,7 +807,7 @@ dialog h3{margin:0;font-size:17px}
   function setView(v){
     view = v;
     document.querySelectorAll("#viewSwitch button").forEach(b=>b.setAttribute("aria-pressed", b.dataset.view===v));
-    $("#view-manager").hidden = v!=="manager"; $("#view-user").hidden = v!=="user";
+    $("#view-manager").hidden = v!=="manager"; $("#view-user").hidden = v!=="user"; $("#view-client").hidden = v!=="client";
     try{ if(me) localStorage.setItem("wms-view-"+me,v); }catch(e){}
   }
   function setPanel(p){
@@ -1654,10 +1669,33 @@ dialog h3{margin:0;font-size:17px}
     updatePreview();
     $("#n-accounts").textContent = [...S.accounts.values()].filter(a=>a.active).length;
     if (!me) return;
+    if (isClient){ renderClient(); return; }
     if (isMgr){ renderApprovals(); renderAssets(); renderTransit(); renderLocations(); renderHolds(); renderAudit(); renderReport(); renderLog(); renderAccounts(); }
     renderUser();
     resolveNames();
   }
+  // Client (view only): the inventory list, with no names of who holds what and no buttons.
+  const CLIENT_ST = {available:"In stock", on_hold:"On loan", approved:"On loan", return_pending:"On loan", requested:"In stock", cancelled:"On loan",
+    in_transit:"In transit SG → KL", sg_requested:"In stock", sg_outbound:"In transit KL → SG", in_sg:"At SG", inspect:"Being checked", missing:"Missing", retired:"Retired"};
+  const CLIENT_CLS = {"In stock":"s-available", "On loan":"s-on_hold", "In transit SG → KL":"s-in_transit", "In transit KL → SG":"s-sg_outbound", "At SG":"s-in_sg", "Being checked":"s-inspect", "Missing":"s-missing", "Retired":"s-retired"};
+  const cSt = a => CLIENT_ST[a.status] || "Being checked";
+  function renderClient(){
+    const all = assets(), counts = {}; all.forEach(a=>{ const k=cSt(a); counts[k]=(counts[k]||0)+1; });
+    $("#c-tiles").innerHTML = [["Total assets", all.length], ["In stock", counts["In stock"]||0], ["On loan", counts["On loan"]||0], ["In transit", (counts["In transit SG → KL"]||0)+(counts["In transit KL → SG"]||0)]]
+      .map(([l,v])=>`<div class="tile"><b>${v}</b><span>${l}</span></div>`).join("");
+    fillSelect("#c-fcat", categories().map(c=>({v:c,t:c})), "All categories");
+    const sts = Object.keys(CLIENT_CLS).filter(k=>counts[k]);
+    fillSelect("#c-fstatus", sts.map(k=>({v:k,t:`${k} (${counts[k]})`})), "All statuses");
+    const q=$("#c-search").value.trim().toLowerCase(), fc=$("#c-fcat").value, fs=$("#c-fstatus").value;
+    const list = all.filter(a=>(!fc||a.category===fc) && (!fs||cSt(a)===fs) && (!q || [a.tag,a.name,a.model,a.serial,a.category,a.accessories].some(v=>String(v||"").toLowerCase().includes(q))))
+      .sort((x,y)=>x.tag.localeCompare(y.tag,undefined,{numeric:true}));
+    $("#clientTable").innerHTML = table(["Tag","Product","Model / SKU","Category","Serial","Accessories","Location","Status"], list.map(a=>`<tr>
+      <td class="tag">${esc(a.tag)}</td><td>${esc(a.name)}</td><td style="white-space:nowrap">${esc(a.model||"–")}</td><td>${esc(a.category||"–")}</td>
+      <td class="tag" style="font-weight:500">${esc(a.serial||"–")}</td><td class="sub2" style="max-width:24ch">${esc(a.accessories||"–")}</td>
+      <td><span class="bin">${esc(locCode(a.locationId))}</span></td><td><span class="pill ${CLIENT_CLS[cSt(a)]||"s-retired"}">${esc(cSt(a))}</span></td></tr>`),
+      all.length ? "Nothing matches this search." : "No assets yet.");
+  }
+  ["#c-search","#c-fcat","#c-fstatus"].forEach(s=>$(s).addEventListener("input",renderClient));
   ["#a-search","#a-fstatus","#a-floc"].forEach(s=>$(s).addEventListener("input",renderAssets));
   ["#h-search","#h-person","#h-show"].forEach(s=>$(s).addEventListener("input",renderHolds));
   ["#u-search","#u-fcat","#u-avail"].forEach(s=>$(s).addEventListener("input",renderUser));
@@ -1851,7 +1889,7 @@ dialog h3{margin:0;font-size:17px}
     finally{ btn.disabled = false; }
   });
   function renderAccounts(){
-    const list = [...S.accounts.values()].filter(a=>!a.deleted).sort((a,b)=>(!a.active)-(!b.active) || ["manager","assistant","pm","staff"].indexOf(pickOf(a))-["manager","assistant","pm","staff"].indexOf(pickOf(b)) || (a.name||"").localeCompare(b.name||""));
+    const list = [...S.accounts.values()].filter(a=>!a.deleted).sort((a,b)=>(!a.active)-(!b.active) || ["manager","assistant","pm","staff","client"].indexOf(pickOf(a))-["manager","assistant","pm","staff","client"].indexOf(pickOf(b)) || (a.name||"").localeCompare(b.name||""));
     $("#accTable").innerHTML = table(["Name",A.loginLabel,"Role","Status","Last login",""], list.map(a=>{
       const self = a.id===me, off = !a.active;
       return `<tr><td><b>${esc(a.name)}</b>${self?' <span class="sub2">(you)</span>':""}</td><td class="tag">${esc(a.login)}</td>
@@ -1885,8 +1923,8 @@ dialog h3{margin:0;font-size:17px}
     } else if (act==="role"){
       const cur = pickOf(a);
       openDlg(`<h3>Change role for ${esc(a.name)}</h3>
-        <p class="hint">Currently: <b>${ROLE_LABEL[cur]}</b>. Store managers and assistant store managers have full access, including approvals, stock and user accounts. Project managers create and edit assets and track shipments, but can't approve loans, receive shipments or manage accounts. Staff can only request and return assets.</p>
-        <label class="f">New role<select id="d-role">${["staff","pm","assistant","manager"].map(k=>`<option value="${k}" ${k===cur?"selected":""}>${ROLE_LABEL[k]}</option>`).join("")}</select></label>
+        <p class="hint">Currently: <b>${ROLE_LABEL[cur]}</b>. Store managers and assistant store managers have full access, including approvals, stock and user accounts. Project managers create and edit assets and track shipments, but can't approve loans, receive shipments or manage accounts. Staff can only request and return assets. Clients can only view the inventory list.</p>
+        <label class="f">New role<select id="d-role">${["staff","pm","assistant","manager","client"].map(k=>`<option value="${k}" ${k===cur?"selected":""}>${ROLE_LABEL[k]}</option>`).join("")}</select></label>
         ${dlgBtns("Change role")}`, async()=>{
         const pick = $("#d-role").value;
         if (pick===cur) return;
@@ -2063,6 +2101,16 @@ dialog h3{margin:0;font-size:17px}
     try{ seenAt = localStorage.getItem("wms-seen-"+me) || ""; }catch(e){ seenAt = ""; }
     patch(A.coll, me, {lastLoginAt:new Date().toISOString()}).catch(()=>{});
     S.myLog = null;
+    if (acct.role==="client"){
+      // Clients can only read their own account, the assets and the locations.
+      S.accounts = new Map([[me, acct]]);
+      const chk = async () => { try{ const d = await B.get(A.coll, me); const v = d ? A.view(d) : null; if (!v || !v.active){ A.logout("Your account has been disabled. Ask the store manager."); return; } if (v.role!=="client"){ location.reload(); return; } S.accounts = new Map([[me, v]]); }catch(e){} };
+      const t = setInterval(chk, 60000); subs.push(()=>clearInterval(t));
+      subs.push(B.watch("assets", {}, r=>{ S.assets = new Map(r.map(d=>[d.id, d])); renderAll(); }, onErr));
+      subs.push(B.watch("locations", {}, r=>{ S.locations = new Map(r.map(d=>[d.id, d])); renderAll(); }, onErr));
+      if (acct.mustChange) return showGate("change");
+      return showApp();
+    }
     subs.push(B.watch(A.coll, {}, r=>{ S.accounts = new Map(r.map(x=>{ const v = A.view(x); return [v.id, v]; })); onAccounts(); if (me) renderAll(); }, onErr));
     subs.push(B.watch("assets", {}, r=>{ S.assets = new Map(r.map(d=>[d.id, d])); renderAll(); }, onErr));
     subs.push(B.watch("locations", {}, r=>{ S.locations = new Map(r.map(d=>[d.id, d])); renderAll(); }, onErr));
@@ -2109,7 +2157,7 @@ dialog h3{margin:0;font-size:17px}
     $("#viewSwitch").hidden = !isMgr;
     let v="manager", p="assets"; try{ v=localStorage.getItem("wms-view-"+me)||v; p=localStorage.getItem("wms-panel-"+me)||p; }catch(e){}
     if (!isAdmin && ["approvals","audit","accounts"].includes(p)) p="assets";
-    setPanel(p); setView(isMgr ? v : "user");
+    setPanel(p); setView(isClient ? "client" : isMgr ? v : "user");
   }
   function applyLabels(){
     $("#u-user-label").textContent = A.loginLabel;
