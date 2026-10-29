@@ -291,7 +291,7 @@ dialog h3{margin:0;font-size:17px}
         <div class="grid">
           <label class="f">Product name<input id="a-name" required placeholder="e.g. BlackWidow V4 Pro"></label>
           <label class="f">Category<span id="a-cat-wrap" style="display:flex;flex-direction:column;gap:6px"></span></label>
-          <label class="f">Model / SKU<input id="a-model" placeholder="e.g. RZ03-04680100"></label>
+          <label class="f">Model / SKU<input id="a-model" list="modelList" placeholder="Type to search, or enter a new one"><span class="sub2" id="a-model-hint" hidden></span></label>
           <label class="f">Serial number<input id="a-serial" placeholder="Leave blank if several units"></label>
           <label class="f">Where is it now?<select id="a-where"><option value="kl">In KL – on the shelf now</option><option value="sg">In SG – shipping to KL (in transit)</option></select></label>
           <label class="f" data-transit hidden>Shipment / DO reference<input id="a-ship" placeholder="e.g. DO-24518 or courier tracking no."></label>
@@ -304,6 +304,7 @@ dialog h3{margin:0;font-size:17px}
         <label class="f">Accessories<input id="a-acc" placeholder="e.g. USB-C cable, wrist rest, carry pouch"></label>
         <label class="f">Notes / specs<textarea id="a-notes" placeholder="e.g. Win 11 · i9-13950HX RTX4090 32GB RAM 1TB SSD · US SKU"></textarea></label>
         <datalist id="catList"></datalist>
+        <datalist id="modelList"></datalist>
         <p class="err" id="assetErr" hidden></p>
         <div class="row end">
           <span class="hint" id="tagPreview"></span>
@@ -809,6 +810,32 @@ dialog h3{margin:0;font-size:17px}
     el.innerHTML = (first?`<option value="">${esc(first)}</option>`:"") + opts.map(o=>`<option value="${esc(o.v)}">${esc(o.t)}</option>`).join("");
     if ([...el.options].some(o=>o.value===keep)) el.value = keep;
   }
+  // Models already on the desk, for the Model / SKU suggestions. Details come from the newest asset of each model.
+  function models(){
+    const m = new Map();
+    assets().filter(a=>(a.model||"").trim()).sort((x,y)=>String(y.createdAt||"").localeCompare(String(x.createdAt||""))).forEach(a=>{
+      const k=a.model.trim().toLowerCase(); const e=m.get(k);
+      if (e) e.n++; else m.set(k, {model:a.model.trim(), n:1, name:a.name||"", category:a.category||"", accessories:a.accessories||"", notes:a.notes||""});
+    });
+    return [...m.values()].sort((x,y)=>x.model.localeCompare(y.model,undefined,{numeric:true}));
+  }
+  const modelPick = v => { v=String(v||"").trim().replace(/\s+/g," "); return (v && models().find(m=>m.model.toLowerCase()===v.toLowerCase())?.model) || v; };
+  function renderModelList(){
+    $("#modelList").innerHTML = models().map(m=>`<option value="${esc(m.model)}" label="${esc(m.name)}${m.name?" · ":""}${m.n} asset${m.n>1?"s":""}"></option>`).join("");
+  }
+  // Picking a model that already exists fills in the boxes that are still empty.
+  $("#a-model").addEventListener("input", () => {
+    const hint=$("#a-model-hint"), v=$("#a-model").value.trim().toLowerCase();
+    const m = v && models().find(x=>x.model.toLowerCase()===v);
+    if (!m){ hint.hidden=true; return; }
+    const filled=[];
+    if (!$("#a-name").value.trim() && m.name){ $("#a-name").value=m.name; filled.push("name"); }
+    const cs=$("#a-cat"); if (cs && !cs.value && m.category && [...cs.options].some(o=>o.value===m.category)){ cs.value=m.category; filled.push("category"); }
+    if (!$("#a-acc").value.trim() && m.accessories){ $("#a-acc").value=m.accessories; filled.push("accessories"); }
+    if (!$("#a-notes").value.trim() && m.notes){ $("#a-notes").value=m.notes; filled.push("notes"); }
+    hint.textContent = `Existing model · ${m.n} on the desk${filled.length?` · filled in ${filled.join(", ")}`:""}`; hint.hidden=false;
+    if (typeof updatePreview==="function") updatePreview();
+  });
   function categories(){ return [...new Set(assets().map(a=>a.category).filter(Boolean))].sort((x,y)=>x.localeCompare(y)); }
   // Category picker: existing categories + "add new". Typing a name that already exists (any capitals) reuses it.
   function catSelectHtml(id, current){
@@ -895,13 +922,13 @@ dialog h3{margin:0;font-size:17px}
     if (serial && assets().some(a=>a.serial===serial)){ err.textContent=`Serial ${serial} is already registered.`; err.hidden=false; return; }
     const tags = nextTags($("#a-prefix").value, qty);
     const where = $("#a-where").value, inTransit = where==="sg", shipRef = $("#a-ship").value.trim(), eta = $("#a-eta").value;
-    const base = { name, category:readCat("a-cat"), model:$("#a-model").value.trim(), serial, accessories:$("#a-acc").value.trim(), notes:$("#a-notes").value.trim(), auditMonths:+$("#a-audit").value||3, locationId:loc, status: inTransit ? "in_transit" : "available", holderId:null, holdSince:null, dueBack:null, purpose:"", createdAt:new Date().toISOString(), createdBy:me,
+    const base = { name, category:readCat("a-cat"), model:modelPick($("#a-model").value), serial, accessories:$("#a-acc").value.trim(), notes:$("#a-notes").value.trim(), auditMonths:+$("#a-audit").value||3, locationId:loc, status: inTransit ? "in_transit" : "available", holderId:null, holdSince:null, dueBack:null, purpose:"", createdAt:new Date().toISOString(), createdBy:me,
       ...(inTransit ? {transitFrom:"SG", shipRef, eta:eta||null, dispatchedAt:new Date().toISOString(), dispatchedBy:me} : {}) };
     try{
       for (const tag of tags){ await put("assets", slug(tag), {...base, tag}); }
       await log({action:"Created", tag: tags.length>1?`${tags[0]}…${tags.at(-1)}`:tags[0], name, note: inTransit ? `${qty} unit${qty>1?"s":""} in transit from SG${shipRef?` · shipment ${shipRef}`:""}${eta?` · ETA ${eta}`:""} · shelf on arrival ${locCode(loc)}` : `${qty} unit${qty>1?"s":""} at ${locCode(loc)}`});
       toast(`Created ${qty} asset${qty>1?"s":""}: ${tags.length>1?tags[0]+" to "+tags.at(-1):tags[0]}${inTransit?" (in transit)":""}`);
-      ["#a-name","#a-model","#a-serial","#a-acc","#a-notes"].forEach(s=>$(s).value=""); $("#a-qty").value=1; updatePreview();
+      ["#a-name","#a-model","#a-serial","#a-acc","#a-notes"].forEach(s=>$(s).value=""); $("#a-model-hint").hidden=true; $("#a-qty").value=1; updatePreview();
     }catch(x){ failed(x); }
   });
 
@@ -1145,7 +1172,7 @@ dialog h3{margin:0;font-size:17px}
     openDlg(`<h3>${esc(a.tag)} · ${esc(a.name)}</h3>
       <div class="grid">
         <label class="f" style="grid-column:1/-1">Product name<input id="d-name" value="${esc(a.name)}" required></label>
-        <label class="f">Model / SKU<input id="d-model" value="${esc(a.model||"")}"></label>
+        <label class="f">Model / SKU<input id="d-model" list="modelList" value="${esc(a.model||"")}"></label>
         <label class="f">Status<select id="d-st" ${canStatus?"":"disabled"}>${["available","inspect","missing","retired"].map(s=>`<option value="${s}" ${a.status===s?"selected":""}>${STATUS[s]}</option>`).join("")}${held||!canStatus&&!["available","inspect","missing","retired"].includes(a.status)?`<option selected>${STATUS[a.status]}</option>`:""}</select></label>
         <label class="f">${transit?"Shelf on arrival":"Location"}<select id="d-loc" ${canLoc?"":"disabled"}>${locs().map(l=>`<option value="${esc(l.id)}" ${l.id===a.locationId?"selected":""}>${esc(l.code)}</option>`).join("")}</select></label>
         <label class="f">Serial number<input id="d-serial" value="${esc(a.serial)}"></label>
@@ -1161,7 +1188,7 @@ dialog h3{margin:0;font-size:17px}
       <div class="row" style="justify-content:space-between">${isAdmin?`<button class="btn danger" value="delete" type="button" id="d-del">Delete asset</button>`:"<span></span>"}${dlgBtns("Save changes").replace('<div class="row end">','<div class="row">')}</div>`, async () => {
       const newName = $("#d-name").value.trim().replace(/\s+/g," ");
       if (!newName){ toast("Enter a product name."); return false; }
-      const upd = {name:newName, model:$("#d-model").value.trim(), locationId:canLoc ? $("#d-loc").value : a.locationId, serial:$("#d-serial").value.trim(), category:readCat("d-cat"), accessories:$("#d-acc").value.trim(), notes:$("#d-notes").value.trim(), auditMonths:+$("#d-aud").value||3};
+      const upd = {name:newName, model:modelPick($("#d-model").value), locationId:canLoc ? $("#d-loc").value : a.locationId, serial:$("#d-serial").value.trim(), category:readCat("d-cat"), accessories:$("#d-acc").value.trim(), notes:$("#d-notes").value.trim(), auditMonths:+$("#d-aud").value||3};
       if (canStatus) upd.status = $("#d-st").value;
       if (transit){ upd.shipRef = $("#d-ship").value.trim(); upd.eta = $("#d-eta").value || null; }
       try{
@@ -1615,7 +1642,7 @@ dialog h3{margin:0;font-size:17px}
     fillSelect("#a-loc", L, L.length?"":"Create a location first");
     fillSelect("#a-floc", L.map(o=>({v:o.v,t:o.t})), "All locations");
     const cats = categories();
-    renderCatPicker(); if (isMgr) renderCategories();
+    renderCatPicker(); renderModelList(); if (isMgr) renderCategories();
     fillSelect("#u-fcat", cats.map(c=>({v:c,t:c})), "All categories");
     $("#n-assets").textContent = S.assets.size; $("#n-locations").textContent = S.locations.size;
     const trAll = assets().filter(a=>a.status==="in_transit"), sgPrep = assets().filter(a=>a.status==="sg_requested").length;
