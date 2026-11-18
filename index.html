@@ -289,10 +289,10 @@ dialog h3{margin:0;font-size:17px}
       <form class="card" id="assetForm" autocomplete="off">
         <h2>Create new assets</h2>
         <div class="grid">
-          <label class="f">Product name<input id="a-name" required placeholder="e.g. BlackWidow V4 Pro"></label>
+          <label class="f"><span id="a-name-label">Product name</span><input id="a-name" required placeholder="e.g. BlackWidow V4 Pro"></label>
           <label class="f">Category<span id="a-cat-wrap" style="display:flex;flex-direction:column;gap:6px"></span></label>
           <label class="f">Model / SKU<input id="a-model" list="modelList" placeholder="Type to search, or enter a new one"><span class="sub2" id="a-model-hint" hidden></span></label>
-          <label class="f">Serial number<input id="a-serial" placeholder="Leave blank if several units"></label>
+          <label class="f" id="a-serial-wrap">Serial number<input id="a-serial" placeholder="e.g. SI2641G19001281"></label>
           <label class="f">Where is it now?<select id="a-where"><option value="kl">In KL – on the shelf now</option><option value="sg">In SG – shipping to KL (in transit)</option></select></label>
           <label class="f" data-transit hidden>Shipment / DO reference<input id="a-ship" placeholder="e.g. DO-24518 or courier tracking no."></label>
           <label class="f" data-transit hidden>Expected arrival in KL<input type="date" id="a-eta"></label>
@@ -300,6 +300,11 @@ dialog h3{margin:0;font-size:17px}
           <label class="f">Tag prefix<input id="a-prefix" value="RZ" maxlength="10"></label>
           <label class="f">Units to create<input id="a-qty" type="number" min="1" max="50" value="1"></label>
           <label class="f">Audit every<select id="a-audit"><option value="1">1 month</option><option value="3" selected>3 months</option><option value="6">6 months</option><option value="12">12 months</option></select></label>
+        </div>
+        <div id="a-units" hidden style="display:flex;flex-direction:column;gap:8px">
+          <p class="subhead" style="margin:0">Each unit</p>
+          <p class="hint">Give each unit its own product name and serial number. Names start as the product name above, so change only what differs (e.g. add S1, S2…). To paste from Excel, copy a column of serials or names and paste it into the first box. It fills the boxes below.</p>
+          <div id="a-unit-rows"></div>
         </div>
         <label class="f">Accessories<input id="a-acc" placeholder="e.g. USB-C cable, wrist rest, carry pouch"></label>
         <label class="f">Notes / specs<textarea id="a-notes" placeholder="e.g. Win 11 · i9-13950HX RTX4090 32GB RAM 1TB SSD · US SKU"></textarea></label>
@@ -462,7 +467,9 @@ dialog h3{margin:0;font-size:17px}
         <input type="search" id="c-search" placeholder="Search product, tag, model, serial or category">
         <select id="c-fcat" aria-label="Category"></select>
         <select id="c-fstatus" aria-label="Status"><option value="">All statuses</option></select>
+        <button class="btn ghost" type="button" id="c-csv">Download spreadsheet</button>
       </div>
+      <p class="hint" id="c-count" style="margin:0"></p>
       <div id="clientTable"></div>
     </div>
   </section>
@@ -915,11 +922,43 @@ dialog h3{margin:0;font-size:17px}
     for (const a of assets()){ const m = (a.tag||"").match(new RegExp("^"+p+"-(\\d+)$")); if (m) max = Math.max(max, +m[1]); }
     return Array.from({length:n},(_,i)=>`${p}-${String(max+i+1).padStart(4,"0")}`);
   }
+  // Several units: one row each, with its own product name and serial.
+  const unitVals = [];   // {name, serial, own} kept while the quantity changes; own = name typed by hand
+  function readUnits(){ document.querySelectorAll("#a-unit-rows tbody tr").forEach((tr,i)=>{ const n=tr.querySelector("[data-k=name]"), s=tr.querySelector("[data-k=serial]"); unitVals[i] = {name:n.value, serial:s.value, own:n.dataset.own==="1"}; }); }
+  function renderUnits(skipRead){
+    const n = Math.max(1,Math.min(50,+$("#a-qty").value||1)), multi = n>1, t = nextTags($("#a-prefix").value,n), base = $("#a-name").value;
+    $("#a-units").hidden = !multi; $("#a-serial-wrap").hidden = multi;
+    $("#a-name-label").textContent = multi ? "Product name (starting name for each unit)" : "Product name";
+    if (!multi){ $("#a-unit-rows").innerHTML = ""; return; }
+    if (!skipRead) readUnits();
+    const one = $("#a-serial").value.trim(); if (one && !(unitVals[0]&&unitVals[0].serial)){ unitVals[0] = {...(unitVals[0]||{name:"",own:false}), serial:one}; $("#a-serial").value=""; }
+    $("#a-unit-rows").innerHTML = table(["#","Tag","Product name","Serial number"], t.map((tag,i)=>{ const v = unitVals[i] || {name:"", serial:"", own:false};
+      return `<tr><td class="num sub2">${i+1}</td><td class="tag">${esc(tag)}</td>
+        <td><input data-k="name" data-i="${i}" data-own="${v.own?1:0}" value="${esc(v.own ? v.name : base)}" aria-label="Product name for unit ${i+1}"></td>
+        <td><input data-k="serial" data-i="${i}" value="${esc(v.serial||"")}" placeholder="Serial for unit ${i+1}" aria-label="Serial number for unit ${i+1}"></td></tr>`; }), "");
+  }
+  function syncUnitNames(){ const base=$("#a-name").value; document.querySelectorAll('#a-unit-rows [data-k=name][data-own="0"]').forEach(el=>el.value=base); }
+  $("#a-unit-rows").addEventListener("input", e => { if (e.target.dataset.k==="name") e.target.dataset.own = e.target.value!==$("#a-name").value ? "1" : "0"; });
+  // Pasting several lines (a column from Excel) fills this box and the ones below it, adding units if needed.
+  $("#a-unit-rows").addEventListener("paste", e => {
+    const el = e.target, k = el.dataset && el.dataset.k; if (!k) return;
+    const lines = (e.clipboardData||window.clipboardData).getData("text").split(/\r?\n/).map(x=>x.split("\t")[0].trim());
+    while (lines.length && !lines.at(-1)) lines.pop();
+    if (lines.length < 2) return;
+    e.preventDefault(); readUnits();
+    const start = +el.dataset.i, need = Math.min(50, start + lines.length);
+    lines.slice(0, 50-start).forEach((v,j)=>{ const u = unitVals[start+j] || (unitVals[start+j] = {name:"", serial:"", own:false}); if (k==="serial") u.serial = v; else { u.name = v; u.own = true; } });
+    if (need > +$("#a-qty").value) $("#a-qty").value = need;
+    renderUnits(true); updatePreview();
+    toast(`Pasted ${Math.min(lines.length, 50-start)} ${k==="serial"?"serial numbers":"names"}`);
+  });
+  $("#a-name").addEventListener("input", syncUnitNames);
   function updatePreview(){
     const n = Math.max(1,Math.min(50,+$("#a-qty").value||1)); const t = nextTags($("#a-prefix").value,n);
     $("#tagPreview").textContent = n===1 ? `Tag: ${t[0]}` : `Tags: ${t[0]} → ${t[n-1]}`;
+    syncUnitNames();
   }
-  ["#a-prefix","#a-qty"].forEach(s=>$(s).addEventListener("input",updatePreview));
+  ["#a-prefix","#a-qty"].forEach(s=>$(s).addEventListener("input",()=>{ renderUnits(); updatePreview(); }));
   $("#a-where").addEventListener("change", () => {
     const sg = $("#a-where").value==="sg";
     document.querySelectorAll("[data-transit]").forEach(el=>el.hidden=!sg);
@@ -932,18 +971,26 @@ dialog h3{margin:0;font-size:17px}
     const err=$("#assetErr"); err.hidden=true;
     const name=$("#a-name").value.trim(), loc=$("#a-loc").value, qty=Math.max(1,Math.min(50,+$("#a-qty").value||1));
     if (!name || !loc){ err.textContent = !S.locations.size ? "Create a location first, in the Locations tab." : "Enter a product name and choose a location."; err.hidden=false; return; }
-    const serial=$("#a-serial").value.trim();
-    if (serial && qty>1){ err.textContent="A serial number belongs to one unit. Set units to 1, or leave the serial blank."; err.hidden=false; return; }
-    if (serial && assets().some(a=>a.serial===serial)){ err.textContent=`Serial ${serial} is already registered.`; err.hidden=false; return; }
     const tags = nextTags($("#a-prefix").value, qty);
+    // One {name, serial} per unit.
+    let units;
+    if (qty===1) units = [{name, serial:$("#a-serial").value.trim()}];
+    else { readUnits(); units = tags.map((_,i)=>{ const v=unitVals[i]||{}; return {name:(v.own && v.name.trim()) || name, serial:(v.serial||"").trim()}; }); }
+    const sers = units.map(u=>u.serial).filter(Boolean), seen = new Set();
+    const dupIn = sers.find(x=>{ const k=x.toLowerCase(); if (seen.has(k)) return true; seen.add(k); return false; });
+    if (dupIn){ err.textContent=`Serial ${dupIn} is entered twice.`; err.hidden=false; return; }
+    const have = new Map(assets().filter(a=>a.serial).map(a=>[a.serial.trim().toLowerCase(), a.tag]));
+    const dupOld = sers.find(x=>have.has(x.toLowerCase()));
+    if (dupOld){ err.textContent=`Serial ${dupOld} is already registered (${have.get(dupOld.toLowerCase())}).`; err.hidden=false; return; }
     const where = $("#a-where").value, inTransit = where==="sg", shipRef = $("#a-ship").value.trim(), eta = $("#a-eta").value;
-    const base = { name, category:readCat("a-cat"), model:modelPick($("#a-model").value), serial, accessories:$("#a-acc").value.trim(), notes:$("#a-notes").value.trim(), auditMonths:+$("#a-audit").value||3, locationId:loc, status: inTransit ? "in_transit" : "available", holderId:null, holdSince:null, dueBack:null, purpose:"", createdAt:new Date().toISOString(), createdBy:me,
+    const base = { category:readCat("a-cat"), model:modelPick($("#a-model").value), accessories:$("#a-acc").value.trim(), notes:$("#a-notes").value.trim(), auditMonths:+$("#a-audit").value||3, locationId:loc, status: inTransit ? "in_transit" : "available", holderId:null, holdSince:null, dueBack:null, purpose:"", createdAt:new Date().toISOString(), createdBy:me,
       ...(inTransit ? {transitFrom:"SG", shipRef, eta:eta||null, dispatchedAt:new Date().toISOString(), dispatchedBy:me} : {}) };
     try{
-      for (const tag of tags){ await put("assets", slug(tag), {...base, tag}); }
-      await log({action:"Created", tag: tags.length>1?`${tags[0]}…${tags.at(-1)}`:tags[0], name, note: inTransit ? `${qty} unit${qty>1?"s":""} in transit from SG${shipRef?` · shipment ${shipRef}`:""}${eta?` · ETA ${eta}`:""} · shelf on arrival ${locCode(loc)}` : `${qty} unit${qty>1?"s":""} at ${locCode(loc)}`});
+      const docs = tags.map((tag,i)=>({id:slug(tag), ...base, tag, name:units[i].name, serial:units[i].serial}));
+      await setMany("assets", docs);
+      await log({action:"Created", tag: tags.length>1?`${tags[0]}…${tags.at(-1)}`:tags[0], name, note: (inTransit ? `${qty} unit${qty>1?"s":""} in transit from SG${shipRef?` · shipment ${shipRef}`:""}${eta?` · ETA ${eta}`:""} · shelf on arrival ${locCode(loc)}` : `${qty} unit${qty>1?"s":""} at ${locCode(loc)}`) + (sers.length ? ` · serial${sers.length>1?"s":""} ${sers.join(", ")}` : "")});
       toast(`Created ${qty} asset${qty>1?"s":""}: ${tags.length>1?tags[0]+" to "+tags.at(-1):tags[0]}${inTransit?" (in transit)":""}`);
-      ["#a-name","#a-model","#a-serial","#a-acc","#a-notes"].forEach(s=>$(s).value=""); $("#a-model-hint").hidden=true; $("#a-qty").value=1; updatePreview();
+      ["#a-name","#a-model","#a-serial","#a-acc","#a-notes"].forEach(s=>$(s).value=""); $("#a-model-hint").hidden=true; $("#a-qty").value=1; unitVals.length=0; renderUnits(); updatePreview();
     }catch(x){ failed(x); }
   });
 
@@ -1687,15 +1734,26 @@ dialog h3{margin:0;font-size:17px}
     const sts = Object.keys(CLIENT_CLS).filter(k=>counts[k]);
     fillSelect("#c-fstatus", sts.map(k=>({v:k,t:`${k} (${counts[k]})`})), "All statuses");
     const q=$("#c-search").value.trim().toLowerCase(), fc=$("#c-fcat").value, fs=$("#c-fstatus").value;
-    const list = all.filter(a=>(!fc||a.category===fc) && (!fs||cSt(a)===fs) && (!q || [a.tag,a.name,a.model,a.serial,a.category,a.accessories].some(v=>String(v||"").toLowerCase().includes(q))))
+    const list = clientList = all.filter(a=>(!fc||a.category===fc) && (!fs||cSt(a)===fs) && (!q || [a.tag,a.name,a.model,a.serial,a.category,a.accessories].some(v=>String(v||"").toLowerCase().includes(q))))
       .sort((x,y)=>x.tag.localeCompare(y.tag,undefined,{numeric:true}));
     $("#clientTable").innerHTML = table(["Tag","Product","Model / SKU","Category","Serial","Accessories","Location","Status"], list.map(a=>`<tr>
       <td class="tag">${esc(a.tag)}</td><td>${esc(a.name)}</td><td style="white-space:nowrap">${esc(a.model||"–")}</td><td>${esc(a.category||"–")}</td>
       <td class="tag" style="font-weight:500">${esc(a.serial||"–")}</td><td class="sub2" style="max-width:24ch">${esc(a.accessories||"–")}</td>
       <td><span class="bin">${esc(locCode(a.locationId))}</span></td><td><span class="pill ${CLIENT_CLS[cSt(a)]||"s-retired"}">${esc(cSt(a))}</span></td></tr>`),
       all.length ? "Nothing matches this search." : "No assets yet.");
+    $("#c-count").textContent = list.length < all.length ? `Showing ${list.length} of ${all.length} assets. The download includes only these.` : "";
+    $("#c-csv").disabled = !list.length;
   }
+  let clientList = [];
   ["#c-search","#c-fcat","#c-fstatus"].forEach(s=>$(s).addEventListener("input",renderClient));
+  // Download what the client is looking at: the whole list, or just the filtered rows.
+  $("#c-csv").onclick = async () => {
+    const rows = [["Tag","Product","Model / SKU","Category","Serial","Accessories","Location","Status"],
+      ...clientList.map(a=>[a.tag, a.name, a.model||"", a.category||"", a.serial||"", a.accessories||"", locCode(a.locationId), cSt(a)])];
+    const text = rows.map(r=>r.map(csvCell).join(",")).join("\r\n");
+    const filtered = clientList.length < assets().length;
+    if (await saveFile(`inventory-${today()}${filtered?"-filtered":""}.csv`, "\uFEFF" + text, "text/csv")) toast(`Saved ${clientList.length} asset${clientList.length===1?"":"s"}`);
+  };
   ["#a-search","#a-fstatus","#a-floc"].forEach(s=>$(s).addEventListener("input",renderAssets));
   ["#h-search","#h-person","#h-show"].forEach(s=>$(s).addEventListener("input",renderHolds));
   ["#u-search","#u-fcat","#u-avail"].forEach(s=>$(s).addEventListener("input",renderUser));
