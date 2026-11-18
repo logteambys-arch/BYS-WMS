@@ -294,7 +294,7 @@ dialog h3{margin:0;font-size:17px}
           <label class="f">Model / SKU<input id="a-model" list="modelList" placeholder="Type to search, or enter a new one"><span class="sub2" id="a-model-hint" hidden></span></label>
           <label class="f" id="a-serial-wrap">Serial number<input id="a-serial" placeholder="e.g. SI2641G19001281"></label>
           <label class="f">Where is it now?<select id="a-where"><option value="kl">In KL – on the shelf now</option><option value="sg">In SG – shipping to KL (in transit)</option></select></label>
-          <label class="f" data-transit hidden>Shipment / DO reference<input id="a-ship" placeholder="e.g. DO-24518 or courier tracking no."></label>
+          <label class="f" data-transit hidden>Shipment / DO reference *<input id="a-ship" placeholder="e.g. DO-24518 or courier tracking no."></label>
           <label class="f" data-transit hidden>Expected arrival in KL<input type="date" id="a-eta"></label>
           <label class="f"><span id="a-loc-label">Store at location</span><select id="a-loc" required></select></label>
           <label class="f">Tag prefix<input id="a-prefix" value="RZ" maxlength="10"></label>
@@ -981,6 +981,7 @@ dialog h3{margin:0;font-size:17px}
   ["#a-prefix","#a-qty"].forEach(s=>$(s).addEventListener("input",()=>{ renderUnits(); updatePreview(); }));
   $("#a-where").addEventListener("change", () => {
     const sg = $("#a-where").value==="sg";
+    $("#a-ship").required = sg;
     document.querySelectorAll("[data-transit]").forEach(el=>el.hidden=!sg);
     $("#a-loc-label").textContent = sg ? "Shelf when it arrives in KL" : "Store at location";
   });
@@ -1003,6 +1004,7 @@ dialog h3{margin:0;font-size:17px}
     const dupOld = sers.find(x=>have.has(x.toLowerCase()));
     if (dupOld){ err.textContent=`Serial ${dupOld} is already registered (${have.get(dupOld.toLowerCase())}).`; err.hidden=false; return; }
     const where = $("#a-where").value, inTransit = where==="sg", shipRef = $("#a-ship").value.trim(), eta = $("#a-eta").value;
+    if (inTransit && !shipRef){ err.textContent="Enter the shipment / DO reference for items shipping from SG."; err.hidden=false; $("#a-ship").focus(); return; }
     const base = { category:readCat("a-cat"), model:modelPick($("#a-model").value), accessories:$("#a-acc").value.trim(), notes:$("#a-notes").value.trim(), auditMonths:+$("#a-audit").value||3, locationId:loc, status: inTransit ? "in_transit" : "available", holderId:null, holdSince:null, dueBack:null, purpose:"", createdAt:new Date().toISOString(), createdBy:me,
       ...(inTransit ? {transitFrom:"SG", shipRef, eta:eta||null, dispatchedAt:new Date().toISOString(), dispatchedBy:me} : {}) };
     try{
