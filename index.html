@@ -304,6 +304,12 @@ dialog h3{margin:0;font-size:17px}
         <div id="a-units" hidden style="display:flex;flex-direction:column;gap:8px">
           <p class="subhead" style="margin:0">Each unit</p>
           <p class="hint">Give each unit its own product name and serial number. Names start as the product name above, so change only what differs (e.g. add S1, S2…). To paste from Excel, copy a column of serials or names and paste it into the first box. It fills the boxes below.</p>
+          <div class="row" style="gap:8px;align-items:flex-end">
+            <label class="f" style="flex:0 1 140px">Before the number<input id="a-num-pre" placeholder="e.g. S or #"></label>
+            <label class="f" style="flex:0 1 110px">Start at<input id="a-num-start" value="1" inputmode="numeric"></label>
+            <button class="btn quiet" type="button" id="a-num-btn">Add running numbers</button>
+            <span class="sub2" id="a-num-eg"></span>
+          </div>
           <div id="a-unit-rows"></div>
         </div>
         <label class="f">Accessories<input id="a-acc" placeholder="e.g. USB-C cable, wrist rest, carry pouch"></label>
@@ -930,11 +936,12 @@ dialog h3{margin:0;font-size:17px}
     $("#a-units").hidden = !multi; $("#a-serial-wrap").hidden = multi;
     $("#a-name-label").textContent = multi ? "Product name (starting name for each unit)" : "Product name";
     if (!multi){ $("#a-unit-rows").innerHTML = ""; return; }
+    numExample();
     if (!skipRead) readUnits();
     const one = $("#a-serial").value.trim(); if (one && !(unitVals[0]&&unitVals[0].serial)){ unitVals[0] = {...(unitVals[0]||{name:"",own:false}), serial:one}; $("#a-serial").value=""; }
     $("#a-unit-rows").innerHTML = table(["#","Tag","Product name","Serial number"], t.map((tag,i)=>{ const v = unitVals[i] || {name:"", serial:"", own:false};
       return `<tr><td class="num sub2">${i+1}</td><td class="tag">${esc(tag)}</td>
-        <td><input data-k="name" data-i="${i}" data-own="${v.own?1:0}" value="${esc(v.own ? v.name : base)}" aria-label="Product name for unit ${i+1}"></td>
+        <td><input data-k="name" data-i="${i}" data-own="${v.own?1:0}" value="${esc(v.own ? v.name : base)}" placeholder="Name for unit ${i+1}" aria-label="Product name for unit ${i+1}"></td>
         <td><input data-k="serial" data-i="${i}" value="${esc(v.serial||"")}" placeholder="Serial for unit ${i+1}" aria-label="Serial number for unit ${i+1}"></td></tr>`; }), "");
   }
   function syncUnitNames(){ const base=$("#a-name").value; document.querySelectorAll('#a-unit-rows [data-k=name][data-own="0"]').forEach(el=>el.value=base); }
@@ -953,6 +960,19 @@ dialog h3{margin:0;font-size:17px}
     toast(`Pasted ${Math.min(lines.length, 50-start)} ${k==="serial"?"serial numbers":"names"}`);
   });
   $("#a-name").addEventListener("input", syncUnitNames);
+  // Running numbers: "<product name> <before><n>", e.g. Paisley T2 65% FSMP S1, S2… Start at 01 to get 01, 02…
+  function runNum(i){
+    const st = $("#a-num-start").value.trim() || "1", n = (parseInt(st,10)||0) + i;
+    return `${$("#a-num-pre").value.trim()}${String(n).padStart(/^0\d/.test(st) ? st.length : 1, "0")}`;
+  }
+  function numExample(){ const base=$("#a-name").value.trim()||"Product name"; $("#a-num-eg").textContent = `e.g. ${base} ${runNum(0)}, ${base} ${runNum(1)}…`; }
+  ["#a-num-pre","#a-num-start","#a-name"].forEach(s=>$(s).addEventListener("input", numExample));
+  $("#a-num-btn").onclick = () => {
+    const base = $("#a-name").value.trim();
+    if (!base){ toast("Type the product name first"); $("#a-name").focus(); return; }
+    document.querySelectorAll("#a-unit-rows [data-k=name]").forEach((el,i)=>{ el.value = `${base} ${runNum(i)}`; el.dataset.own = "1"; });
+    readUnits(); toast("Running numbers added. You can still edit any name.");
+  };
   function updatePreview(){
     const n = Math.max(1,Math.min(50,+$("#a-qty").value||1)); const t = nextTags($("#a-prefix").value,n);
     $("#tagPreview").textContent = n===1 ? `Tag: ${t[0]}` : `Tags: ${t[0]} → ${t[n-1]}`;
